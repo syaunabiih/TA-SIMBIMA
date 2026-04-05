@@ -1,104 +1,95 @@
-// prisma/seed.js
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Mulai seeding database...');
+  console.log('Memulai proses seeding data dummy SIMBIMA...');
 
-  // 1. Buat Data GEDUNG
+  // 1. Hash password default untuk semua user (misal: "123456")
+  const hashedPassword = await bcrypt.hash('123456', 10);
+
+  // 2. Buat Data Gedung Utama
   const gedungA = await prisma.gedung.upsert({
-    where: { kode_gedung: 'G_A' },
-    update: {},
+    where: { kode_gedung: 'A01' },
+    update: {}, // Jika sudah ada, jangan lakukan apa-apa
     create: {
-      nama_gedung: 'Asrama Putra A',
-      kode_gedung: 'G_A',
-      alamat: 'Jl. Limau Manis',
-      jumlah_lantai: 3,
-      kapasitas_mahasiswa: 100,
+      nama_gedung: 'Asrama Putra Gedung A',
+      kode_gedung: 'A01',
+      alamat: 'Lingkungan Kampus Unand Limau Manis',
+      jumlah_lantai: 4,
+      kapasitas_mahasiswa: 200,
       status_gedung: 'AKTIF',
     },
   });
+  console.log('✅ Data Gedung berhasil dibuat');
 
-  const gedungB = await prisma.gedung.upsert({
-    where: { kode_gedung: 'G_B' },
+  // 3. Buat Data Ketua Pokja
+  const pokja = await prisma.ketuaPokja.upsert({
+    where: { nip: '198001012005011001' },
     update: {},
     create: {
-      nama_gedung: 'Asrama Putri B',
-      kode_gedung: 'G_B',
-      alamat: 'Jl. Limau Manis',
-      jumlah_lantai: 3,
-      kapasitas_mahasiswa: 100,
-      status_gedung: 'AKTIF',
+      nip: '198001012005011001',
+      nama: 'Bapak Ketua Pokja',
+      email: 'pokja@unand.ac.id',
+      password: hashedPassword,
+      no_telp: '081234567890',
     },
   });
+  console.log('✅ Data Ketua Pokja berhasil dibuat');
 
-  console.log('✅ Gedung berhasil dibuat');
-
-  // Password Hash (Semua akun passwordnya: 123456)
-  const passwordHash = await bcrypt.hash('123456', 10);
-
-  // 2. Buat Data FASILITATOR
-  await prisma.fasilitator.upsert({
-    where: { nip: '19900101' },
+  // 4. Buat Data Fasilitator
+  const fasilitator = await prisma.fasilitator.upsert({
+    where: { nip: '199002022010021002' },
     update: {},
     create: {
-      nip: '19900101',
-      nama: 'Budi Fasilitator A',
-      email: 'fasil_a@simbima.com',
-      password: passwordHash,
+      nip: '199002022010021002',
+      nama: 'Uda Fasilitator',
+      email: 'fasilitator@unand.ac.id',
+      password: hashedPassword,
+      no_telp: '081298765432',
       id_gedung: gedungA.id_gedung,
     },
   });
+  console.log('✅ Data Fasilitator berhasil dibuat');
 
-  await prisma.fasilitator.upsert({
-    where: { nip: '19900202' },
+  // 5. Buat Data Mahasiswa
+  const mahasiswa1 = await prisma.mahasiswa.upsert({
+    where: { nim: '2211523012' },
     update: {},
     create: {
-      nip: '19900202',
-      nama: 'Siti Fasilitator B',
-      email: 'fasil_b@simbima.com',
-      password: passwordHash,
-      id_gedung: gedungB.id_gedung,
-    },
-  });
-
-  console.log('✅ Fasilitator berhasil dibuat');
-
-  // 3. Buat Data MAHASISWA
-  await prisma.mahasiswa.upsert({
-    where: { nim: '2211521001' },
-    update: {},
-    create: {
-      nim: '2211521001',
-      nama: 'Andi Mahasiswa A',
-      email: 'andi@mhs.unand.ac.id',
-      password: passwordHash,
-      id_gedung: gedungA.id_gedung,
-      lantai: 1,
-      nomor_kamar: '101',
-      kuota_izin_pulang: 10,
-    },
-  });
-
-  await prisma.mahasiswa.upsert({
-    where: { nim: '2211521002' },
-    update: {},
-    create: {
-      nim: '2211521002',
-      nama: 'Rina Mahasiswa B',
-      email: 'rina@mhs.unand.ac.id',
-      password: passwordHash,
-      id_gedung: gedungB.id_gedung,
+      nim: '2211523012',
+      nama: 'Syauqi Nabiih Marwa',
+      email: 'syauqi@student.unand.ac.id',
+      password: hashedPassword,
       lantai: 2,
-      nomor_kamar: '205',
-      kuota_izin_pulang: 10,
+      nomor_kamar: 'A-205',
+      alamat_asal: 'Padang',
+      no_telp: '082211223344',
+      id_gedung: gedungA.id_gedung,
+      status_hunian: 'AKTIF', 
     },
   });
 
-  console.log('✅ Mahasiswa berhasil dibuat');
-  console.log('🚀 Seeding selesai! Database siap digunakan.');
+  const mahasiswa2 = await prisma.mahasiswa.upsert({
+    where: { nim: '2211523000' },
+    update: {},
+    create: {
+      nim: '2211523000',
+      nama: 'Mahasiswa Non-Aktif (Testing)',
+      email: 'nonaktif@student.unand.ac.id',
+      password: hashedPassword,
+      lantai: 1,
+      nomor_kamar: 'A-101',
+      alamat_asal: 'Bukittinggi',
+      no_telp: '085566778899',
+      id_gedung: gedungA.id_gedung,
+      status_hunian: 'KELUAR', // Sengaja dibikin keluar untuk ngetes ditolak login
+    },
+  });
+  console.log('✅ Data Mahasiswa berhasil dibuat');
+
+  console.log('Proses seeding selesai! 🎉');
 }
 
 main()

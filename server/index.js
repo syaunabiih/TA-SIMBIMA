@@ -10,11 +10,17 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const authRoutes = require("./routes/authRoutes");
+const kegiatanRoutes = require("./routes/kegiatanRoutes");
+const izinRoutes = require("./routes/izinRoutes");
+const monitoringRoutes = require("./routes/monitoringRoutes");
 
 // Middleware
 app.use(cors());
 app.use(express.json()); // Agar bisa baca data JSON dari frontend
 app.use("/api/auth", authRoutes);
+app.use("/api/kegiatan", kegiatanRoutes); 
+app.use("/api/izin", izinRoutes);
+app.use("/api/monitoring", monitoringRoutes);
 
 // Test Route (Cek apakah server jalan)
 app.get("/", (req, res) => {
@@ -40,6 +46,28 @@ app.get("/api/test-db", async (req, res) => {
 });
 
 // Jalankan Server
-app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`✅ Server SIMBIMA berjalan di http://localhost:${PORT}`);
+});
+
+// Handle port sudah dipakai
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Port ${PORT} sudah dipakai proses lain!`);
+    console.error(`   Jalankan perintah ini untuk membebaskan port:`);
+    console.error(`   npx kill-port ${PORT}`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
+
+// Graceful shutdown saat Ctrl+C
+process.on("SIGINT", async () => {
+  console.log("\n🛑 Server dimatikan...");
+  await prisma.$disconnect();
+  server.close(() => {
+    console.log("✅ Server berhasil dimatikan.");
+    process.exit(0);
+  });
 });
