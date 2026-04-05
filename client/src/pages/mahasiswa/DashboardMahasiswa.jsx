@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetKegiatan } from '../../utils/api';
+import { useCountUp } from '../../hooks/useCountUp';
 
 // ─── Ikon untuk menu sidebar ───────────────────────────────────────────────
 const IconHome = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
@@ -13,30 +14,25 @@ const MENU = [
   { path: '/dashboard/mahasiswa/izin', label: 'Perizinan', icon: <IconFile /> },
 ];
 
-// ─── Komponen kartu statistik ──────────────────────────────────────────────
-function StatCard({ label, value, icon, color, sub }) {
+// ─── Komponen kartu statistik (animated) ───────────────────────────────────
+function StatCard({ label, value, icon, color, sub, delay = 0 }) {
+  const animatedValue = useCountUp(value);
   return (
-    <div style={{
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: '16px',
-      padding: '20px 24px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px',
-    }}>
-      <div style={{
+    <div className={`stat-card card-animate card-animate-${delay + 1}`}
+      style={{ display: 'flex', alignItems: 'center', gap: '16px' }}
+    >
+      <div className="icon-container" style={{
         width: '48px', height: '48px', borderRadius: '12px', flexShrink: 0,
-        background: `${color}20`,
+        background: `${color}15`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: color,
       }}>
         {icon}
       </div>
-      <div>
-        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px' }}>{label}</div>
-        <div style={{ color: 'white', fontSize: '24px', fontWeight: '700', letterSpacing: '-0.5px' }}>{value}</div>
-        {sub && <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px', marginTop: '2px' }}>{sub}</div>}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ color: '#64748b', fontSize: '13px', fontWeight: '500' }}>{label}</div>
+        <div style={{ color: '#1e293b', fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px', lineHeight: 1.2 }}>{animatedValue}</div>
+        {sub && <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '2px' }}>{sub}</div>}
       </div>
     </div>
   );
@@ -45,16 +41,17 @@ function StatCard({ label, value, icon, color, sub }) {
 // ─── Badge status kegiatan ─────────────────────────────────────────────────
 function BadgeStatus({ status }) {
   const map = {
-    TERJADWAL:   { label: 'Terjadwal',   bg: 'rgba(59,130,246,0.15)', color: '#60a5fa' },
-    BERLANGSUNG: { label: 'Berlangsung', bg: 'rgba(245,158,11,0.15)', color: '#fbbf24' },
-    SELESAI:     { label: 'Selesai',     bg: 'rgba(16,185,129,0.15)', color: '#34d399' },
-    DIBATALKAN:  { label: 'Dibatalkan',  bg: 'rgba(239,68,68,0.15)',  color: '#f87171' },
+    TERJADWAL:   { label: 'Terjadwal',   bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+    BERLANGSUNG: { label: 'Berlangsung', bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+    SELESAI:     { label: 'Selesai',     bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
+    DIBATALKAN:  { label: 'Dibatalkan',  bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
   };
-  const s = map[status] || { label: status, bg: 'rgba(255,255,255,0.1)', color: 'white' };
+  const s = map[status] || { label: status, bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' };
   return (
     <span style={{
       background: s.bg, color: s.color, fontSize: '11px',
       fontWeight: '600', padding: '3px 10px', borderRadius: '20px',
+      border: `1px solid ${s.border}`,
     }}>{s.label}</span>
   );
 }
@@ -71,28 +68,27 @@ function DashboardMahasiswa() {
   const nama = localStorage.getItem('simbima_nama') || 'Mahasiswa';
 
   useEffect(() => {
-    // Ambil data kegiatan dari API saat halaman pertama kali dimuat
     apiGetKegiatan()
       .then(res => {
         if (res.data) setKegiatan(res.data);
       })
       .finally(() => setLoading(false));
-  }, []); // [] artinya hanya dijalankan sekali saat komponen mount
+  }, []);
 
   const kegiatanMendatang = kegiatan.filter(k => k.status_kegiatan === 'TERJADWAL');
   const kegiatanSelesai   = kegiatan.filter(k => k.status_kegiatan === 'SELESAI');
 
   return (
     <DashboardLayout menuItems={MENU}>
-      <div style={{ padding: '32px', color: 'white' }}>
+      <div className="page-enter" style={{ padding: '32px' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '700', color: 'white', letterSpacing: '-0.4px' }}>
+        <div className="section-animate" style={{ marginBottom: '32px' }}>
+          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '700', color: '#1e293b', letterSpacing: '-0.4px' }}>
             Selamat Datang 👋
           </h1>
-          <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.45)', fontSize: '14px' }}>
-            Halo, <strong style={{ color: '#10b981' }}>{nama}</strong>. Berikut ringkasan aktivitas kamu.
+          <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>
+            Halo, <strong style={{ color: '#059669' }}>{nama}</strong>. Berikut ringkasan aktivitas kamu.
           </p>
         </div>
 
@@ -103,65 +99,66 @@ function DashboardMahasiswa() {
             value={kegiatan.length}
             color="#10b981"
             sub="Semua kegiatan"
+            delay={0}
             icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/></svg>}
           />
           <StatCard
             label="Akan Datang"
             value={kegiatanMendatang.length}
-            color="#60a5fa"
+            color="#2563eb"
             sub="Perlu kehadiran"
+            delay={1}
             icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><polyline points="12 6 12 12 16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}
           />
           <StatCard
             label="Sudah Selesai"
             value={kegiatanSelesai.length}
-            color="#a78bfa"
+            color="#7c3aed"
             sub="Riwayat kegiatan"
+            delay={2}
             icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
           />
         </div>
 
         {/* Tabel Kegiatan */}
-        <div style={{
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '16px',
-          overflow: 'hidden',
-        }}>
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Jadwal Kegiatan</h2>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>{kegiatan.length} kegiatan</span>
+        <div className="table-card card-animate card-animate-4">
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1e293b' }}>Jadwal Kegiatan</h2>
+            <span style={{ color: '#94a3b8', fontSize: '13px', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>{kegiatan.length} kegiatan</span>
           </div>
 
           {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
-              <div style={{ fontSize: '14px' }}>Memuat data...</div>
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[1,2,3].map(i => (
+                <div key={i} className="skeleton-shimmer" style={{ height: '48px', borderRadius: '8px' }} />
+              ))}
             </div>
           ) : kegiatan.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
-              <div style={{ fontSize: '14px' }}>Belum ada kegiatan terdaftar</div>
+            <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>📭</div>
+              <div style={{ fontSize: '14px', fontWeight: '500' }}>Belum ada kegiatan terdaftar</div>
+              <div style={{ fontSize: '13px', marginTop: '4px' }}>Kegiatan akan muncul setelah fasilitator menambahkan jadwal</div>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                  <tr style={{ background: '#f8fafc' }}>
                     {['Kegiatan', 'Tanggal', 'Jenis', 'Lokasi', 'Status'].map(h => (
-                      <th key={h} style={{ padding: '12px 20px', textAlign: 'left', color: 'rgba(255,255,255,0.4)', fontWeight: '500', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                      <th key={h} style={{ padding: '12px 20px', textAlign: 'left', color: '#64748b', fontWeight: '500', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {kegiatan.map((k, i) => (
-                    <tr key={k.id_kegiatan} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    <tr key={k.id_kegiatan}
+                      className="table-row row-animate"
+                      style={{ animationDelay: `${0.05 * i}s` }}
                     >
-                      <td style={{ padding: '14px 20px', color: 'white', fontWeight: '500' }}>{k.nama_kegiatan}</td>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.6)' }}>{formatTanggal(k.tanggal_kegiatan)}</td>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.6)' }}>{k.jenis_kegiatan.replace('_', ' ')}</td>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.6)' }}>{k.lokasi}</td>
+                      <td style={{ padding: '14px 20px', color: '#1e293b', fontWeight: '500' }}>{k.nama_kegiatan}</td>
+                      <td style={{ padding: '14px 20px', color: '#64748b' }}>{formatTanggal(k.tanggal_kegiatan)}</td>
+                      <td style={{ padding: '14px 20px', color: '#64748b' }}>{k.jenis_kegiatan.replace('_', ' ')}</td>
+                      <td style={{ padding: '14px 20px', color: '#64748b' }}>{k.lokasi}</td>
                       <td style={{ padding: '14px 20px' }}><BadgeStatus status={k.status_kegiatan} /></td>
                     </tr>
                   ))}

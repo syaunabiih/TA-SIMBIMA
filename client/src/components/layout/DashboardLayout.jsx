@@ -2,18 +2,11 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 /**
- * DashboardLayout — Layout utama yang dipakai semua role
- *
- * Props:
- * - menuItems: array menu yang ditampilkan di sidebar (berbeda per role)
- * - children: konten utama halaman
- *
- * Konsep: "Composition Pattern" — layout ini tidak tahu isinya apa,
- * dia cuma menyediakan kerangka (sidebar + main area).
+ * DashboardLayout — Layout utama yang dipakai semua role (Light Theme)
  */
 function DashboardLayout({ menuItems, children }) {
   const navigate = useNavigate();
-  const location = useLocation(); // Untuk tahu URL aktif saat ini
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const nama = localStorage.getItem('simbima_nama') || 'Pengguna';
@@ -31,13 +24,13 @@ function DashboardLayout({ menuItems, children }) {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#0d1117', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f4f8', fontFamily: 'Inter, sans-serif' }}>
 
       {/* ── SIDEBAR ── */}
       <aside style={{
-        width: sidebarOpen ? '240px' : '72px',
-        background: 'linear-gradient(180deg, #0f2027 0%, #0d1f1a 100%)',
-        borderRight: '1px solid rgba(255,255,255,0.07)',
+        width: sidebarOpen ? '260px' : '72px',
+        background: '#ffffff',
+        borderRight: '1px solid #e2e8f0',
         display: 'flex',
         flexDirection: 'column',
         transition: 'width 0.3s ease',
@@ -48,11 +41,12 @@ function DashboardLayout({ menuItems, children }) {
         left: 0,
         height: '100vh',
         zIndex: 100,
+        boxShadow: '2px 0 8px rgba(0,0,0,0.03)',
       }}>
         {/* Logo */}
         <div style={{
           padding: '20px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid #e2e8f0',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
@@ -72,8 +66,8 @@ function DashboardLayout({ menuItems, children }) {
           </div>
           {sidebarOpen && (
             <div>
-              <div style={{ color: 'white', fontWeight: '700', fontSize: '16px', letterSpacing: '-0.3px' }}>SIMBIMA</div>
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>v1.0</div>
+              <div style={{ color: '#1e293b', fontWeight: '700', fontSize: '16px', letterSpacing: '-0.3px' }}>SIMBIMA</div>
+              <div style={{ color: '#94a3b8', fontSize: '11px' }}>v1.0</div>
             </div>
           )}
         </div>
@@ -97,21 +91,50 @@ function DashboardLayout({ menuItems, children }) {
                   borderRadius: '10px',
                   border: 'none',
                   cursor: 'pointer',
+                  position: 'relative',
                   background: isActive
-                    ? 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(5,150,105,0.15))'
+                    ? 'linear-gradient(135deg, #ecfdf5, #d1fae5)'
                     : 'transparent',
-                  color: isActive ? '#10b981' : 'rgba(255,255,255,0.55)',
+                  color: isActive ? '#059669' : '#64748b',
                   fontSize: '14px',
-                  fontWeight: isActive ? '600' : '400',
+                  fontWeight: isActive ? '600' : '500',
                   textAlign: 'left',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isActive ? 'inset 0 0 0 1px rgba(16,185,129,0.3)' : 'none',
+                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: isActive ? 'inset 0 0 0 1px rgba(16,185,129,0.25)' : 'none',
                   whiteSpace: 'nowrap',
                 }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = '#f1f5f9';
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }
+                }}
               >
-                <span style={{ flexShrink: 0 }}>{item.icon}</span>
+                {/* Active indicator bar */}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    left: '-8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '4px',
+                    height: '24px',
+                    borderRadius: '0 4px 4px 0',
+                    background: 'linear-gradient(180deg, #10b981, #059669)',
+                    animation: 'fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }} />
+                )}
+                <span style={{
+                  flexShrink: 0,
+                  transition: 'transform 0.2s ease',
+                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                }}>{item.icon}</span>
                 {sidebarOpen && <span>{item.label}</span>}
               </button>
             );
@@ -119,18 +142,20 @@ function DashboardLayout({ menuItems, children }) {
         </nav>
 
         {/* User Info + Logout */}
-        <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '12px 8px', borderTop: '1px solid #e2e8f0' }}>
           {sidebarOpen && (
             <div style={{
               padding: '10px 12px', marginBottom: '8px',
-              background: 'rgba(255,255,255,0.04)',
+              background: '#f8fafc',
               borderRadius: '10px',
+              border: '1px solid #e2e8f0',
             }}>
-              <div style={{ color: 'white', fontSize: '13px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nama}</div>
+              <div style={{ color: '#1e293b', fontSize: '13px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nama}</div>
               <div style={{
                 display: 'inline-block', marginTop: '4px',
-                background: 'rgba(16,185,129,0.15)', color: '#10b981',
+                background: '#ecfdf5', color: '#059669',
                 fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px',
+                border: '1px solid #a7f3d0',
               }}>{roleLabel}</div>
             </div>
           )}
@@ -141,11 +166,12 @@ function DashboardLayout({ menuItems, children }) {
               width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
               padding: '10px 12px', borderRadius: '10px', border: 'none',
               cursor: 'pointer', background: 'transparent',
-              color: 'rgba(239,68,68,0.7)', fontSize: '14px', fontWeight: '500',
+              color: '#ef4444', fontSize: '14px', fontWeight: '500',
               transition: 'all 0.2s ease', whiteSpace: 'nowrap',
+              opacity: 0.7,
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#ef4444'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.7'; }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="16 17 21 12 16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
             {sidebarOpen && <span>Keluar</span>}
@@ -158,10 +184,11 @@ function DashboardLayout({ menuItems, children }) {
           style={{
             position: 'absolute', top: '22px', right: '-12px',
             width: '24px', height: '24px', borderRadius: '50%',
-            background: '#1a3a2a', border: '1px solid rgba(255,255,255,0.1)',
-            color: 'rgba(255,255,255,0.5)', cursor: 'pointer',
+            background: '#ffffff', border: '1px solid #e2e8f0',
+            color: '#64748b', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '12px', zIndex: 101,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
           }}
         >
           {sidebarOpen ? '‹' : '›'}
@@ -171,10 +198,10 @@ function DashboardLayout({ menuItems, children }) {
       {/* ── MAIN CONTENT ── */}
       <main style={{
         flex: 1,
-        marginLeft: sidebarOpen ? '240px' : '72px',
+        marginLeft: sidebarOpen ? '260px' : '72px',
         transition: 'margin-left 0.3s ease',
         minHeight: '100vh',
-        background: '#0d1117',
+        background: '#f0f4f8',
       }}>
         {children}
       </main>

@@ -1,19 +1,11 @@
 /**
  * utils/api.js — Pusat semua komunikasi dengan server
- *
- * Konsep yang dipakai:
- * - BASE_URL: alamat server, kalau ganti cukup ubah di sini
- * - getToken(): ambil token dari localStorage untuk dikirim ke server
- * - authHeader(): membuat header Authorization yang diperlukan
- * - Setiap fungsi = 1 endpoint API
  */
 
 const BASE_URL = 'http://localhost:5000/api';
 
-// Ambil token yang disimpan saat login
 const getToken = () => localStorage.getItem('simbima_token');
 
-// Header standar untuk request yang butuh autentikasi
 const authHeader = () => ({
   'Content-Type': 'application/json',
   'Authorization': `Bearer ${getToken()}`,
@@ -51,6 +43,11 @@ export const apiInputKehadiran = (data) =>
 
 // ─── PERIZINAN ────────────────────────────────────────────────────────────────
 
+export const apiGetIzin = () =>
+  fetch(`${BASE_URL}/izin`, {
+    headers: authHeader(),
+  }).then(res => res.json());
+
 export const apiAjukanIzin = (data) =>
   fetch(`${BASE_URL}/izin/ajukan`, {
     method: 'POST',
@@ -61,6 +58,13 @@ export const apiAjukanIzin = (data) =>
 export const apiValidasiIzin = (id_perizinan, data) =>
   fetch(`${BASE_URL}/izin/validasi/${id_perizinan}`, {
     method: 'PUT',
+    headers: authHeader(),
+    body: JSON.stringify(data),
+  }).then(res => res.json());
+
+export const apiKonfirmasiIzin = (data) =>
+  fetch(`${BASE_URL}/izin/konfirmasi`, {
+    method: 'POST',
     headers: authHeader(),
     body: JSON.stringify(data),
   }).then(res => res.json());

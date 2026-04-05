@@ -1,6 +1,48 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// 0. Melihat Daftar Perizinan (multi-role)
+const getDaftarIzin = async (req, res) => {
+  try {
+    const { id, role } = req.user;
+    let whereClause = {};
+
+    if (role === "MAHASISWA") {
+      // Mahasiswa hanya lihat izin miliknya sendiri
+      whereClause = { id_mahasiswa: id };
+    } else if (role === "FASILITATOR") {
+      // Fasilitator lihat semua izin di gedungnya
+      const fasilitator = await prisma.fasilitator.findUnique({
+        where: { id_fasilitator: id }
+      });
+      if (fasilitator) {
+        whereClause = {
+          mahasiswa: { id_gedung: fasilitator.id_gedung }
+        };
+      }
+    }
+    // KETUA_POKJA -> tidak ada filter, lihat semua
+
+    const daftarIzin = await prisma.perizinan.findMany({
+      where: whereClause,
+      include: {
+        mahasiswa: { select: { nama: true, nim: true, nomor_kamar: true, gedung: { select: { nama_gedung: true } } } },
+        fasilitator: { select: { nama: true } },
+        konfirmasis: true
+      },
+      orderBy: { tanggal_pengajuan: 'desc' }
+    });
+
+    res.json({
+      status: "Sukses",
+      data: daftarIzin
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Gagal mengambil data perizinan." });
+  }
+};
+
 // 1. Mahasiswa Mengajukan Izin
 const ajukanIzin = async (req, res) => {
   const { jenis_izin, tanggal_mulai, tanggal_selesai, alasan, dokumen_pendukung } = req.body;
@@ -164,4 +206,4 @@ const konfirmasiIzin = async (req, res) => {
 };
 
 // Jangan lupa tambahkan nama fungsinya di export
-module.exports = { ajukanIzin, validasiIzin, konfirmasiIzin };
+module.exports = { getDaftarIzin, ajukanIzin, validasiIzin, konfirmasiIzin };

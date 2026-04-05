@@ -1,8 +1,11 @@
 const express = require("express");
-const { ajukanIzin, validasiIzin, konfirmasiIzin } = require("../controllers/izinController");
+const { getDaftarIzin, ajukanIzin, validasiIzin, konfirmasiIzin } = require("../controllers/izinController");
 const { verifyToken, isFasilitator } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
+
+// Rute untuk melihat daftar perizinan (multi-role)
+router.get("/", verifyToken, getDaftarIzin);
 
 // Rute untuk Mahasiswa mengajukan izin
 router.post("/ajukan", verifyToken, ajukanIzin);

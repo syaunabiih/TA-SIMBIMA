@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function LoginPage() {
-  const navigate = useNavigate(); // Hook untuk berpindah halaman secara programmatic
+  const navigate = useNavigate();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,14 +24,12 @@ function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Simpan token & info user ke localStorage
         localStorage.setItem('simbima_token', data.token);
         localStorage.setItem('simbima_role', data.data.role);
         localStorage.setItem('simbima_nama', data.data.nama);
 
         setAlert({ show: true, message: `Selamat datang, ${data.data.nama}!`, type: 'success' });
 
-        // Arahkan ke dashboard sesuai role setelah 1 detik
         setTimeout(() => {
           const role = data.data.role;
           if (role === 'MAHASISWA') navigate('/dashboard/mahasiswa');
@@ -70,7 +68,7 @@ function LoginPage() {
                 background: 'linear-gradient(135deg, #10b981, #059669)',
                 borderRadius: '18px', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
               }}>
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -82,11 +80,11 @@ function LoginPage() {
           </div>
           <h1 style={{
             fontSize: '28px', fontWeight: '800',
-            background: 'linear-gradient(135deg, #ffffff 0%, #a7f3d0 100%)',
+            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             margin: '0 0 6px 0', letterSpacing: '-0.5px',
           }}>SIMBIMA</h1>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', margin: 0, letterSpacing: '0.3px' }}>
+          <p style={{ color: '#64748b', fontSize: '13px', margin: 0, letterSpacing: '0.3px' }}>
             Sistem Monitoring Pembinaan Karakter
           </p>
         </div>
@@ -106,7 +104,7 @@ function LoginPage() {
         <form onSubmit={handleLogin} className="fade-in-up-delay">
           {/* NIM/NIP */}
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>
+            <label style={{ display: 'block', color: '#475569', fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>
               NIM / NIP
             </label>
             <div className="input-wrapper">
@@ -127,7 +125,7 @@ function LoginPage() {
 
           {/* Password */}
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>
+            <label style={{ display: 'block', color: '#475569', fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>
               Password
             </label>
             <div className="input-wrapper">
@@ -165,7 +163,7 @@ function LoginPage() {
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: '12px', marginTop: '28px', marginBottom: 0 }}>
+        <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '28px', marginBottom: 0 }}>
           © 2025 SIMBIMA · Sistem Pembinaan Karakter
         </p>
       </div>
