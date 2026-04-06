@@ -136,9 +136,28 @@ const validasiIzin = async (req, res) => {
       });
     }
 
+    // ====================================================
+    // 👉 TAMBAHAN: KIRIM NOTIFIKASI OTOMATIS KE MAHASISWA
+    // ====================================================
+    let pesanNotif = `Pengajuan izin ${izin.jenis_izin.replace('_', ' ').toLowerCase()} Anda telah ${status_pengajuan} oleh Fasilitator.`;
+    if (catatan_fasilitator) {
+      pesanNotif += ` Catatan: ${catatan_fasilitator}`;
+    }
+
+    await prisma.notifikasi.create({
+      data: {
+        judul: `Status Pengajuan Izin: ${status_pengajuan}`,
+        pesan: pesanNotif,
+        tipe_notifikasi: "IZIN",
+        id_mahasiswa: izin.id_mahasiswa, // Target notifikasi ke mahasiswa
+        id_referensi: izin.id_perizinan
+      }
+    });
+    // ====================================================
+
     res.json({
       status: "Sukses",
-      message: `Pengajuan izin berhasil di-${status_pengajuan}!`,
+      message: `Pengajuan izin berhasil di-${status_pengajuan} dan notifikasi telah dikirim!`,
       data: izinUpdate
     });
 

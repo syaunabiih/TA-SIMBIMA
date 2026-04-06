@@ -13,6 +13,9 @@ const authRoutes = require("./routes/authRoutes");
 const kegiatanRoutes = require("./routes/kegiatanRoutes");
 const izinRoutes = require("./routes/izinRoutes");
 const monitoringRoutes = require("./routes/monitoringRoutes");
+const mahasiswaRoutes = require("./routes/mahasiswaRoutes");
+const rekapRoutes = require("./routes/rekapRoutes");
+const notifikasiRoutes = require("./routes/notifikasiRoutes");
 
 // Middleware
 app.use(cors());
@@ -21,6 +24,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/kegiatan", kegiatanRoutes); 
 app.use("/api/izin", izinRoutes);
 app.use("/api/monitoring", monitoringRoutes);
+app.use("/api/mahasiswa", mahasiswaRoutes);
+app.use("/api/rekap", rekapRoutes);
+app.use("/api/notifikasi", notifikasiRoutes);
 
 // Test Route (Cek apakah server jalan)
 app.get("/", (req, res) => {

@@ -147,5 +147,80 @@ const inputKehadiran = async (req, res) => {
   }
 };
 
-// Jangan lupa update export-nya agar fungsi ini bisa dipakai!
-module.exports = { buatKegiatan, getDaftarKegiatan, inputKehadiran };
+
+// 3. Edit (Update) Jadwal Kegiatan
+const editKegiatan = async (req, res) => {
+  const { id_kegiatan } = req.params;
+  const { 
+    nama_kegiatan, deskripsi, tanggal_kegiatan, 
+    waktu_mulai, waktu_selesai, lokasi, jenis_kegiatan, status_kegiatan 
+  } = req.body;
+
+  try {
+    // Pastikan hanya Fasilitator yang bisa edit
+    if (req.user.role !== "FASILITATOR") {
+      return res.status(403).json({ message: "Akses ditolak! Hanya fasilitator yang dapat mengedit kegiatan." });
+    }
+
+    // Update data di database
+    const kegiatanUpdate = await prisma.kegiatanPembinaan.update({
+      where: { id_kegiatan: Number(id_kegiatan) },
+      data: {
+        nama_kegiatan,
+        deskripsi,
+        tanggal_kegiatan: tanggal_kegiatan ? new Date(tanggal_kegiatan) : undefined,
+        // Konversi string jam (misal "04:30") ke format ISO Date DateTime Prisma
+        waktu_mulai: waktu_mulai ? new Date(`1970-01-01T${waktu_mulai}:00Z`) : undefined,
+        waktu_selesai: waktu_selesai ? new Date(`1970-01-01T${waktu_selesai}:00Z`) : undefined,
+        lokasi,
+        jenis_kegiatan,
+        status_kegiatan
+      }
+    });
+
+    res.json({
+      status: "Sukses",
+      message: "Jadwal kegiatan berhasil diperbarui!",
+      data: kegiatanUpdate
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Terjadi kesalahan server saat mengedit kegiatan." });
+  }
+};
+
+
+// 4. Hapus (Delete) Jadwal Kegiatan
+const hapusKegiatan = async (req, res) => {
+  const { id_kegiatan } = req.params;
+
+  try {
+    if (req.user.role !== "FASILITATOR") {
+      return res.status(403).json({ message: "Akses ditolak! Hanya fasilitator yang dapat menghapus kegiatan." });
+    }
+
+    // Proses hapus data
+    await prisma.kegiatanPembinaan.delete({
+      where: { id_kegiatan: Number(id_kegiatan) }
+    });
+
+    res.json({
+      status: "Sukses",
+      message: "Jadwal kegiatan berhasil dihapus dari sistem."
+    });
+
+  } catch (error) {
+    console.error(error);
+    // Error handling jika kegiatan sudah memiliki data absensi (constraint)
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        message: "Kegiatan tidak bisa dihapus karena sudah memiliki data absensi mahasiswa. Silakan ubah statusnya menjadi DIBATALKAN." 
+      });
+    }
+    res.status(500).json({ message: "Terjadi kesalahan server saat menghapus kegiatan." });
+  }
+};
+
+
+module.exports = { buatKegiatan, getDaftarKegiatan, inputKehadiran, editKegiatan, hapusKegiatan };

@@ -7,6 +7,9 @@ const router = express.Router();
 // Rute untuk Login (Bebas akses)
 router.post("/login", login);
 
+// Rute untuk Reset Password (Bebas akses)
+router.post("/reset-password", resetPassword);
+
 // Rute untuk mengecek profil user yang sedang login (Wajib pakai token)
 router.get("/me", verifyToken, (req, res) => {
   res.json({
