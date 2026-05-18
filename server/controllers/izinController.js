@@ -21,7 +21,7 @@ const getDaftarIzin = async (req, res) => {
         };
       }
     }
-    // KETUA_POKJA -> tidak ada filter, lihat semua
+    // SUPERADMIN -> tidak ada filter, lihat semua perizinan
 
     const daftarIzin = await prisma.perizinan.findMany({
       where: whereClause,
@@ -60,15 +60,50 @@ const ajukanIzin = async (req, res) => {
     const selesai = new Date(tanggal_selesai);
     const durasi_hari = Math.ceil((selesai - mulai) / (1000 * 60 * 60 * 24)) + 1;
 
-    // Pengecekan Kuota Jika Izin Pulang Kampung
-    if (jenis_izin === "PULANG_KAMPUNG") {
-      const mhs = await prisma.mahasiswa.findUnique({ where: { id_mahasiswa } });
-      if (mhs.kuota_izin_pulang < durasi_hari) {
-        return res.status(400).json({ 
-          message: `Maaf, kuota izin pulang kampung Anda tersisa ${mhs.kuota_izin_pulang} hari. Pengajuan (${durasi_hari} hari) melebihi kuota.` 
-        });
+    // Pengecekan Izin Aktif (memblokir jika ada izin MENUNGGU/DISETUJUI yg belum lewat tgl selesai)
+    const izinAktif = await prisma.perizinan.findFirst({
+      where: {
+        id_mahasiswa,
+        status_pengajuan: {
+          in: ['MENUNGGU', 'DISETUJUI']
+        },
+        tanggal_selesai: {
+          gte: new Date() // Belum melewati tanggal selesai
+        }
       }
+    });
+
+    if (izinAktif) {
+      return res.status(400).json({
+        message: 'Kamu masih memiliki pengajuan izin yang aktif. Selesaikan atau batalkan terlebih dahulu sebelum mengajukan izin baru.',
+        izin_aktif: {
+          id: izinAktif.id_perizinan,
+          status: izinAktif.status_pengajuan,
+          tanggal_selesai: izinAktif.tanggal_selesai
+        }
+      });
     }
+
+    // Pengecekan Overlap: cek izin aktif yang tanggalnya bentrok
+    const overlap = await prisma.perizinan.findFirst({
+      where: {
+        id_mahasiswa,
+        status_pengajuan: { in: ["MENUNGGU", "DISETUJUI"] },
+        AND: [
+          { tanggal_mulai:   { lte: selesai } },
+          { tanggal_selesai: { gte: mulai   } },
+        ]
+      }
+    });
+    if (overlap) {
+      const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      return res.status(400).json({
+        message: `Tanggal bentrok dengan izin yang sudah ada (${fmt(overlap.tanggal_mulai)} – ${fmt(overlap.tanggal_selesai)}). Pilih tanggal lain.`
+      });
+    }
+
+    // Cek apakah ada upload file multer
+    const urlDokumen = req.file ? `http://localhost:5000/uploads/${req.file.filename}` : null;
 
     // Simpan ke tabel Perizinan
     const izinBaru = await prisma.perizinan.create({
@@ -78,11 +113,34 @@ const ajukanIzin = async (req, res) => {
         tanggal_selesai: selesai,
         durasi_hari,
         alasan,
-        dokumen_pendukung: dokumen_pendukung || null,
+        dokumen_pendukung: urlDokumen || dokumen_pendukung || null,
         id_mahasiswa,
         status_pengajuan: "MENUNGGU"
       }
     });
+
+    // Beritahukan fasilitator yang mengurus gedung ini
+    const mhs = await prisma.mahasiswa.findUnique({
+      where: { id_mahasiswa },
+      include: { gedung: { include: { fasilitators: true } } }
+    });
+    
+    if (mhs && mhs.gedung && mhs.gedung.fasilitators) {
+      const namaIzin = jenis_izin.replace('_', ' ').toLowerCase();
+      const notifPromises = mhs.gedung.fasilitators.map(fasil =>
+        prisma.notifikasi.create({
+          data: {
+            judul: `Pengajuan Izin Baru: ${mhs.nama}`,
+            pesan: `${mhs.nama} mengajukan izin ${namaIzin} untuk ${durasi_hari} hari.`,
+            tipe_notifikasi: 'IZIN',
+            id_fasilitator: fasil.id_fasilitator,
+            id_referensi: izinBaru.id_perizinan,
+            link_tujuan: '/fasilitator/validasi-izin',
+          }
+        })
+      );
+      await Promise.all(notifPromises);
+    }
 
     res.status(201).json({
       status: "Sukses",
@@ -149,8 +207,9 @@ const validasiIzin = async (req, res) => {
         judul: `Status Pengajuan Izin: ${status_pengajuan}`,
         pesan: pesanNotif,
         tipe_notifikasi: "IZIN",
-        id_mahasiswa: izin.id_mahasiswa, // Target notifikasi ke mahasiswa
-        id_referensi: izin.id_perizinan
+        id_mahasiswa: izin.id_mahasiswa,
+        id_referensi: izin.id_perizinan,
+        link_tujuan: `/mahasiswa/izin/${izin.id_perizinan}`,
       }
     });
     // ====================================================
@@ -193,6 +252,9 @@ const konfirmasiIzin = async (req, res) => {
       return res.status(400).json({ message: "Izin ini belum disetujui, tidak bisa melakukan konfirmasi." });
     }
 
+    // Cek apakah ada file yang diupload multer
+    const urlFoto = req.file ? `http://localhost:5000/uploads/${req.file.filename}` : null;
+
     // Simpan data konfirmasi ke tabel KonfirmasiPerizinan
     const konfirmasiBaru = await prisma.konfirmasiPerizinan.create({
       data: {
@@ -200,7 +262,7 @@ const konfirmasiIzin = async (req, res) => {
         jenis_konfirmasi, 
         lokasi_konfirmasi,
         keterangan,
-        foto_bukti: foto_bukti || null // Nanti ini isinya URL/Path gambar
+        foto_bukti: urlFoto || foto_bukti || null // Pakai hasil multer jika ada
       }
     });
 
@@ -209,6 +271,31 @@ const konfirmasiIzin = async (req, res) => {
       await prisma.perizinan.update({
         where: { id_perizinan: Number(id_perizinan) },
         data: { status_pengajuan: "SELESAI" }
+      });
+    }
+
+    // ===========================================
+    // UPDATE: NOTIFIKASI KE FASILITATOR (PROMPT 5)
+    // ===========================================
+    if (izin.id_fasilitator_validasi) {
+      const mhs = await prisma.mahasiswa.findUnique({ where: { id_mahasiswa } });
+      const namaAsli = mhs ? mhs.nama : 'Seorang Mahasiswa';
+      
+      const judulNotif = jenis_konfirmasi === "SAMPAI_TUJUAN" ? `Konfirmasi Tiba - ${namaAsli}` : `Konfirmasi Kembali - ${namaAsli}`;
+      const isiNotif = jenis_konfirmasi === "SAMPAI_TUJUAN" 
+        ? `${namaAsli} sudah tiba di tujuan dan mengirim bukti foto.` 
+        : `${namaAsli} sudah kembali ke asrama.`;
+      const tipeNotif = jenis_konfirmasi === "SAMPAI_TUJUAN" ? "FOTO_BERANGKAT" : "FOTO_PULANG";
+
+      await prisma.notifikasi.create({
+        data: {
+          judul: judulNotif,
+          pesan: isiNotif,
+          tipe_notifikasi: tipeNotif,
+          id_fasilitator: izin.id_fasilitator_validasi,
+          id_referensi: izin.id_perizinan,
+          link_tujuan: '/fasilitator/kepulangan',
+        }
       });
     }
 
@@ -224,5 +311,215 @@ const konfirmasiIzin = async (req, res) => {
   }
 };
 
-// Jangan lupa tambahkan nama fungsinya di export
-module.exports = { getDaftarIzin, ajukanIzin, validasiIzin, konfirmasiIzin };
+// 4. Detail Izin
+const getIzinDetail = async (req, res) => {
+  const { id_perizinan } = req.params;
+  try {
+    const izin = await prisma.perizinan.findUnique({
+      where: { id_perizinan: Number(id_perizinan) },
+      include: {
+        mahasiswa: { select: { nama: true, nim: true, nomor_kamar: true } },
+        fasilitator: { select: { nama: true } },
+        konfirmasis: { orderBy: { tanggal_konfirmasi: 'asc' } }
+      }
+    });
+
+    if (!izin) return res.status(404).json({ message: "Data tidak ditemukan." });
+
+    if (req.user.role === "MAHASISWA" && izin.id_mahasiswa !== req.user.id) {
+      return res.status(403).json({ message: "Akses ditolak" });
+    }
+
+    res.json({ status: "Sukses", data: izin });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Terjadi kesalahan saat mengambil detail izin" });
+  }
+};
+
+// 5. Upload Foto Berangkat
+const uploadFotoBerangkat = async (req, res) => {
+  const { id_perizinan } = req.params;
+  try {
+    const id_mahasiswa = req.user.id;
+
+    const izin = await prisma.perizinan.findUnique({
+      where: { id_perizinan: Number(id_perizinan) }
+    });
+
+    if (!izin) return res.status(404).json({ message: "Data perizinan tidak ditemukan." });
+    if (izin.id_mahasiswa !== id_mahasiswa) return res.status(403).json({ message: "Akses ditolak." });
+    if (izin.status_pengajuan !== "DISETUJUI") {
+      return res.status(400).json({ message: "Foto hanya bisa diupload jika izin sudah disetujui." });
+    }
+    if (!req.file) return res.status(400).json({ message: "File foto tidak ditemukan dalam request." });
+
+    const fotoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+
+    const updated = await prisma.perizinan.update({
+      where: { id_perizinan: Number(id_perizinan) },
+      data: { foto_berangkat: fotoUrl }
+    });
+
+    // Kirim notifikasi ke fasilitator
+    const mhs = await prisma.mahasiswa.findUnique({
+      where: { id_mahasiswa },
+      include: { gedung: { include: { fasilitators: true } } }
+    });
+    if (mhs?.gedung?.fasilitators?.length) {
+      await Promise.all(mhs.gedung.fasilitators.map(fasil =>
+        prisma.notifikasi.create({
+          data: {
+            judul: `Bukti Keberangkatan: ${mhs.nama}`,
+            pesan: `${mhs.nama} telah mengunggah foto bukti tiba di tujuan.`,
+            tipe_notifikasi: 'FOTO_BERANGKAT',
+            id_fasilitator: fasil.id_fasilitator,
+            id_referensi: Number(id_perizinan),
+            link_tujuan: '/fasilitator/kepulangan',
+          }
+        })
+      ));
+    }
+
+    res.json({ status: "Sukses", message: "Foto bukti keberangkatan berhasil diupload.", data: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Terjadi kesalahan saat upload foto berangkat." });
+  }
+};
+
+// 6. Upload Foto Pulang
+const uploadFotoPulang = async (req, res) => {
+  const { id_perizinan } = req.params;
+  try {
+    const id_mahasiswa = req.user.id;
+
+    const izin = await prisma.perizinan.findUnique({
+      where: { id_perizinan: Number(id_perizinan) }
+    });
+
+    if (!izin) return res.status(404).json({ message: "Data perizinan tidak ditemukan." });
+    if (izin.id_mahasiswa !== id_mahasiswa) return res.status(403).json({ message: "Akses ditolak." });
+    if (izin.status_pengajuan !== "DISETUJUI") {
+      return res.status(400).json({ message: "Foto hanya bisa diupload jika izin sudah disetujui." });
+    }
+    // Pastikan foto berangkat sudah diupload lebih dulu
+    if (!izin.foto_berangkat) {
+      return res.status(400).json({
+        message: "Upload foto bukti tiba di tujuan terlebih dahulu sebelum upload foto kepulangan."
+      });
+    }
+    if (!req.file) return res.status(400).json({ message: "File foto tidak ditemukan dalam request." });
+
+    const fotoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+
+    const updated = await prisma.perizinan.update({
+      where: { id_perizinan: Number(id_perizinan) },
+      data: { foto_pulang: fotoUrl }
+    });
+
+    // Jika kedua foto sudah ada, ubah status menjadi SELESAI
+    const izinUpdated = await prisma.perizinan.findUnique({
+      where: { id_perizinan: Number(id_perizinan) }
+    });
+    if (izinUpdated.foto_berangkat && izinUpdated.foto_pulang) {
+      await prisma.perizinan.update({
+        where: { id_perizinan: Number(id_perizinan) },
+        data: { status_pengajuan: "SELESAI" }
+      });
+    }
+
+    // Kirim notifikasi ke fasilitator
+    const mhs2 = await prisma.mahasiswa.findUnique({
+      where: { id_mahasiswa },
+      include: { gedung: { include: { fasilitators: true } } }
+    });
+    if (mhs2?.gedung?.fasilitators?.length) {
+      await Promise.all(mhs2.gedung.fasilitators.map(fasil =>
+        prisma.notifikasi.create({
+          data: {
+            judul: `Bukti Kepulangan: ${mhs2.nama}`,
+            pesan: `${mhs2.nama} telah mengunggah foto bukti kembali ke asrama.`,
+            tipe_notifikasi: 'FOTO_PULANG',
+            id_fasilitator: fasil.id_fasilitator,
+            id_referensi: Number(id_perizinan),
+            link_tujuan: '/fasilitator/kepulangan',
+          }
+        })
+      ));
+    }
+
+    res.json({ status: "Sukses", message: "Foto bukti kepulangan berhasil diupload.", data: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Terjadi kesalahan saat upload foto pulang." });
+  }
+};
+
+// 7. Total Hari Izin Mahasiswa Bulan Ini (untuk fasilitator — ditampilkan di modal review)
+const getTotalHariBulanIni = async (req, res) => {
+  const { id_mahasiswa } = req.params;
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const izinBulanIni = await prisma.perizinan.findMany({
+      where: {
+        id_mahasiswa: Number(id_mahasiswa),
+        status_pengajuan: 'DISETUJUI',
+        tanggal_mulai: { gte: startOfMonth },
+        tanggal_selesai: { lte: endOfMonth },
+      },
+      select: { durasi_hari: true }
+    });
+
+    const totalHari = izinBulanIni.reduce((sum, i) => sum + (i.durasi_hari || 0), 0);
+
+    const namaBulan = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+    res.json({
+      status: 'Sukses',
+      data: { total_hari: totalHari, nama_bulan: namaBulan }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Gagal mengambil total hari izin.' });
+  }
+};
+
+// 8. Batalkan Pengajuan (Mahasiswa)
+const batalkanIzin = async (req, res) => {
+  const { id_perizinan } = req.params;
+  try {
+    const id_mahasiswa = req.user.id;
+
+    const izin = await prisma.perizinan.findUnique({
+      where: { id_perizinan: Number(id_perizinan) }
+    });
+
+    if (!izin || izin.id_mahasiswa !== id_mahasiswa) {
+      return res.status(403).json({ message: "Akses ditolak" });
+    }
+
+    if (izin.status_pengajuan !== 'MENUNGGU') {
+      return res.status(400).json({ message: "Pengajuan hanya bisa dibatalkan jika masih berstatus MENUNGGU" });
+    }
+
+    const updatedIzin = await prisma.perizinan.update({
+      where: { id_perizinan: Number(id_perizinan) },
+      data: { 
+        status_pengajuan: 'DIBATALKAN',
+        updated_at: new Date()
+      }
+    });
+
+    res.json({ status: "Sukses", message: "Pengajuan berhasil dibatalkan", data: updatedIzin });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Terjadi kesalahan server saat membatalkan pengajuan." });
+  }
+};
+
+module.exports = { getDaftarIzin, ajukanIzin, validasiIzin, konfirmasiIzin, getIzinDetail, uploadFotoBerangkat, uploadFotoPulang, getTotalHariBulanIni, batalkanIzin };

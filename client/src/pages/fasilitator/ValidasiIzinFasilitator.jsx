@@ -1,16 +1,23 @@
 import { useState, useEffect } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { apiGetIzin, apiValidasiIzin } from '../../utils/api';
+import { apiGetIzin, apiValidasiIzin, apiGetTotalHariBulanIni } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
+import Modal from '../../components/Modal';
 
 const IconHome     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
 const IconCalendar = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/></svg>;
 const IconFile     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/></svg>;
 
+const IconMapPin = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>;
+const IconFileText = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2"/><polyline points="10 9 9 9 8 9" stroke="currentColor" strokeWidth="2"/></svg>;
+
 const MENU = [
-  { path: '/dashboard/fasilitator', label: 'Dashboard', icon: <IconHome /> },
-  { path: '/dashboard/fasilitator/kegiatan', label: 'Kelola Kegiatan', icon: <IconCalendar /> },
-  { path: '/dashboard/fasilitator/izin', label: 'Validasi Izin', icon: <IconFile /> },
+  { path: '/fasilitator/dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { path: '/fasilitator/kegiatan', label: 'Kelola Kegiatan', icon: <IconCalendar /> },
+  { path: '/fasilitator/perizinan', label: 'Validasi Izin', icon: <IconFile /> },
+  { path: '/fasilitator/kepulangan', label: 'Kepulangan', icon: <IconMapPin /> },
+  { path: '/fasilitator/rekap', label: 'Rekap Absensi', icon: <IconFileText /> },
 ];
 
 function BadgeIzin({ status }) {
@@ -30,20 +37,39 @@ const formatTgl = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric
 function ValidasiIzinFasilitator() {
   const [izinList, setIzinList]   = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(null); // holds izin object
   const [catatan, setCatatan]     = useState('');
   const [processing, setProcessing] = useState(false);
   const [alert, setAlert]         = useState(null);
   const [filter, setFilter]       = useState('SEMUA');
+  const [imgPreview, setImgPreview]       = useState(null);
+  const [totalHari, setTotalHari]         = useState(null); // { total_hari, nama_bulan }
 
-  const fetchIzin = () => {
-    setLoading(true);
+  const fetchIzin = (isPoll = false) => {
+    if (!isPoll) setLoading(true);
+    else setIsRefreshing(true);
+    
     apiGetIzin()
       .then(res => { if (res.data) setIzinList(res.data); })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setIsRefreshing(false);
+      });
   };
 
-  useEffect(() => { fetchIzin(); }, []);
+  useEffect(() => { fetchIzin(false); }, []);
+  usePolling(() => fetchIzin(true), 10000);
+
+  // Buka modal + fetch total hari bulan ini untuk mahasiswa tersebut
+  const openModal = (izin) => {
+    setShowModal(izin);
+    setCatatan('');
+    setTotalHari(null);
+    apiGetTotalHariBulanIni(izin.id_mahasiswa)
+      .then(res => { if (res.status === 'Sukses') setTotalHari(res.data); })
+      .catch(() => {});
+  };
 
   const handleValidasi = async (status) => {
     if (!showModal) return;
@@ -74,7 +100,7 @@ function ValidasiIzinFasilitator() {
 
   return (
     <DashboardLayout menuItems={MENU}>
-      <div className="page-enter" style={{ padding: '32px' }}>
+      <div className="page-enter page-content">
 
         {/* Header */}
         <div className="section-animate" style={{ marginBottom: '24px' }}>
@@ -139,7 +165,7 @@ function ValidasiIzinFasilitator() {
               <div style={{ fontSize: '14px', fontWeight: '500' }}>Tidak ada pengajuan izin</div>
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
@@ -160,7 +186,7 @@ function ValidasiIzinFasilitator() {
                       <td style={{ padding: '12px 14px' }}><BadgeIzin status={iz.status_pengajuan} /></td>
                       <td style={{ padding: '12px 14px' }}>
                         {iz.status_pengajuan === 'MENUNGGU' ? (
-                          <button onClick={() => { setShowModal(iz); setCatatan(''); }} style={{
+                          <button onClick={() => openModal(iz)} style={{
                             background: '#10b981', color: 'white', border: 'none', borderRadius: '8px',
                             padding: '6px 12px', fontSize: '12px', fontWeight: '500', cursor: 'pointer',
                             transition: 'all 0.2s ease',
@@ -182,24 +208,101 @@ function ValidasiIzinFasilitator() {
       </div>
 
       {/* Modal Validasi */}
-      {showModal && (
-        <div className="modal-backdrop" style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)',
-          backdropFilter: 'blur(4px)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px',
-        }} onClick={e => { if (e.target === e.currentTarget) setShowModal(null); }}>
-          <div className="modal-content" style={{
-            background: '#ffffff', border: '1px solid #e2e8f0',
-            borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '460px',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.12)',
-          }}>
+      <Modal isOpen={!!showModal} onClose={() => setShowModal(null)} maxWidth="480px">
+        {showModal && (
+          <>
             <h2 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: '700', color: '#1e293b' }}>Review Izin</h2>
             <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#94a3b8' }}>Pengajuan dari <strong style={{ color: '#1e293b' }}>{showModal.mahasiswa?.nama}</strong></p>
 
-            <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '16px', marginBottom: '16px', fontSize: '13px', color: '#475569', lineHeight: 1.7 }}>
-              <div><strong>Jenis:</strong> {showModal.jenis_izin.replace('_', ' ')}</div>
-              <div><strong>Tanggal:</strong> {formatTgl(showModal.tanggal_mulai)} – {formatTgl(showModal.tanggal_selesai)} ({showModal.durasi_hari} hari)</div>
-              <div><strong>Alasan:</strong> {showModal.alasan}</div>
+            {/* Info Card */}
+            <div style={{
+              border: '1px solid #e2e8f0', borderRadius: '14px',
+              marginBottom: '16px', overflow: 'hidden',
+            }}>
+              {/* Jenis Izin */}
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Jenis Izin</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                    {showModal.jenis_izin.replace(/_/g, ' ')}
+                  </span>
+                  <BadgeIzin status={showModal.status_pengajuan} />
+                </div>
+              </div>
+
+              {/* Periode */}
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Periode</div>
+                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                  {formatTgl(showModal.tanggal_mulai)} – {formatTgl(showModal.tanggal_selesai)}
+                  <span style={{ marginLeft: '8px', fontSize: '12px', color: '#64748b', fontWeight: '400' }}>({showModal.durasi_hari} hari)</span>
+                </div>
+              </div>
+
+              {/* Alasan */}
+              <div style={{ padding: '14px 16px', borderBottom: showModal.dokumen_pendukung ? '1px solid #e2e8f0' : 'none' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Alasan</div>
+                <div style={{ fontSize: '14px', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{showModal.alasan}</div>
+              </div>
+
+              {/* Dokumen Pendukung */}
+              {showModal.dokumen_pendukung && (() => {
+                const docUrl = showModal.dokumen_pendukung;
+                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(docUrl);
+                return (
+                  <div style={{ padding: '14px 16px' }}>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Dokumen Pendukung</div>
+                    <button
+                      onClick={() => {
+                        if (isImage) {
+                          setImgPreview(docUrl);
+                        } else {
+                          window.open(docUrl, '_blank');
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                        padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
+                        background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe',
+                        cursor: 'pointer', transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#dbeafe'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#eff6ff'; }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="15 3 21 3 21 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="10" y1="14" x2="21" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                      Lihat Dokumen
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* ── Total Izin Bulan Ini ── */}
+            <div style={{
+              background: totalHari && totalHari.total_hari > 0 ? '#fffbeb' : '#f8fafc',
+              border: `1px solid ${totalHari && totalHari.total_hari > 0 ? '#fde68a' : '#e2e8f0'}`,
+              borderRadius: '12px', padding: '12px 16px', marginBottom: '16px',
+              display: 'flex', alignItems: 'flex-start', gap: '10px',
+            }}>
+              <span style={{ fontSize: '16px', flexShrink: 0 }}>
+                {totalHari === null ? '' : totalHari.total_hari > 0 ? '' : ''}
+              </span>
+              <div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Total Izin Bulan Ini</div>
+                {totalHari === null ? (
+                  <div style={{ fontSize: '13px', color: '#94a3b8' }}>Memuat data...</div>
+                ) : totalHari.total_hari > 0 ? (
+                  <div style={{ fontSize: '13px', color: '#92400e', fontWeight: '500' }}>
+                    <strong>{showModal.mahasiswa?.nama}</strong> telah izin{' '}
+                    <strong>{totalHari.total_hari} hari</strong>{' '}di bulan {totalHari.nama_bulan}
+                    <span style={{ color: '#a16207', fontSize: '12px' }}></span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '13px', color: '#475569' }}>
+                    Belum ada izin disetujui di bulan {totalHari.nama_bulan}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ marginBottom: '16px' }}>
@@ -228,9 +331,32 @@ function ValidasiIzinFasilitator() {
                 justifyContent: 'center', opacity: processing ? 0.7 : 1,
               }}>Setujui</button>
             </div>
+          </>
+        )}
+      </Modal>
+      {/* Modal Preview Gambar */}
+      <Modal isOpen={!!imgPreview} onClose={() => setImgPreview(null)} maxWidth="90vw" noPadding>
+        {imgPreview && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setImgPreview(null)}
+              style={{
+                position: 'absolute', top: '-14px', right: '-14px',
+                width: '32px', height: '32px', borderRadius: '50%',
+                background: '#ffffff', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                fontWeight: '700', color: '#475569', zIndex: 1,
+              }}
+            >✕</button>
+            <img
+              src={imgPreview}
+              alt="Dokumen Pendukung"
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '12px', display: 'block' }}
+            />
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </DashboardLayout>
   );
 }

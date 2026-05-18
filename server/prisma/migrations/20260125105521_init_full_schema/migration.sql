@@ -83,8 +83,8 @@ CREATE TABLE `kegiatan_pembinaan` (
     `waktu_mulai` TIME NOT NULL,
     `waktu_selesai` TIME NOT NULL,
     `lokasi` VARCHAR(191) NOT NULL,
-    `jenis_kegiatan` ENUM('SHALAT_SUBUH', 'APEL_MALAM', 'KAJIAN', 'SENAM', 'GOTONG_ROYONG', 'LAINNYA') NOT NULL,
-    `status_kegiatan` ENUM('TERJADWAL', 'BERLANGSUNG', 'SELESAI', 'DIBATALKAN') NOT NULL DEFAULT 'TERJADWAL',
+    `jenis_kegiatan` ENUM('SHALAT_SUBUH', 'ABSENSI_MALAM', 'KEGIATAN_PEMBINAAN', 'KEGIATAN_KEBERSAMAAN', 'KEGIATAN_AMA', 'LAINNYA') NOT NULL,
+    `status_kegiatan` ENUM('BERLANGSUNG', 'SELESAI') NOT NULL DEFAULT 'BERLANGSUNG',
     `id_gedung` INTEGER NOT NULL,
     `id_fasilitator` INTEGER NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -210,9 +210,21 @@ CREATE TABLE `notifikasi` (
     `id_mahasiswa` INTEGER NULL,
     `id_fasilitator` INTEGER NULL,
     `id_ketua_pokja` INTEGER NULL,
-    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     PRIMARY KEY (`id_notifikasi`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `reset_token` (
+    `id_token` INTEGER NOT NULL AUTO_INCREMENT,
+    `email` VARCHAR(191) NOT NULL,
+    `token` VARCHAR(191) NOT NULL,
+    `expires_at` DATETIME(3) NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `reset_token_email_key`(`email`),
+    UNIQUE INDEX `reset_token_token_key`(`token`),
+    PRIMARY KEY (`id_token`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey

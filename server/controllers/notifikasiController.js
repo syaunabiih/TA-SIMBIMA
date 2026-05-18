@@ -70,4 +70,28 @@ const tandaiDibaca = async (req, res) => {
   }
 };
 
-module.exports = { getNotifikasi, tandaiDibaca };
+// ==========================================
+// 3. Tandai Semua Notifikasi Telah Dibaca
+// ==========================================
+const tandaiSemuaDibaca = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const role = req.user.role;
+    let whereClause = { status_baca: false };
+
+    if (role === "MAHASISWA") whereClause.id_mahasiswa = userId;
+    else if (role === "FASILITATOR") whereClause.id_fasilitator = userId;
+    else if (role === "KETUA_POKJA") whereClause.id_ketua_pokja = userId;
+
+    const updateBatch = await prisma.notifikasi.updateMany({
+      where: whereClause,
+      data: { status_baca: true, dibaca_pada: new Date() }
+    });
+
+    res.json({ status: "Sukses", message: "Semua notifikasi ditandai dibaca", count: updateBatch.count });
+  } catch(error) {
+    res.status(500).json({ message: "Gagal memproses." });
+  }
+};
+
+module.exports = { getNotifikasi, tandaiDibaca, tandaiSemuaDibaca };

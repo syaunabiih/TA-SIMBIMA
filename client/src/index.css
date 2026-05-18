@@ -1,9 +1,8 @@
 @import "tailwindcss";
+
 @plugin "daisyui" {
   themes: emerald --default;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 * {
   font-family: 'Inter', sans-serif;
@@ -429,6 +428,7 @@ body {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.03), transparent 60%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none; /* ← JANGAN blokir klik pada konten di dalam card */
 }
 
 .stat-card:hover::after {
@@ -523,4 +523,250 @@ body {
 .info-card:hover {
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
   border-color: #6ee7b7;
+}
+
+/* Thin scrollbar utility */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE LAYOUT — SIDEBAR & MAIN CONTENT
+   ═══════════════════════════════════════════════════ */
+
+/* Desktop default: sidebar 260px collapsed to 72px */
+.sidebar {
+  width: 260px;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 100;
+  overflow: hidden;
+  transition: left 0.3s ease, width 0.3s ease;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.03);
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 260px;
+  min-height: 100vh;
+  background: #f0f4f8;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s ease;
+}
+
+/* Backdrop hidden on desktop */
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Hamburger hidden on desktop */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+.hamburger-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+/* Toggle button for desktop sidebar collapse */
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 22px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 101;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+/* "Profil Saya" label - hide on narrow desktop */
+.topbar-name {
+  display: block;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE GRID UTILITIES
+   ═══════════════════════════════════════════════════ */
+
+.grid-responsive-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+.grid-responsive-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.grid-responsive-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.grid-responsive-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE TABLE
+   ═══════════════════════════════════════════════════ */
+
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+.table-responsive table {
+  min-width: 600px;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE PAGE PADDING
+   ═══════════════════════════════════════════════════ */
+
+.page-content {
+  padding: 28px 32px;
+}
+
+/* ═══════════════════════════════════════════════════
+   CARD ANIMATE - add missing delay classes
+   ═══════════════════════════════════════════════════ */
+.card-animate-5 { animation-delay: 0.33s; }
+.card-animate-6 { animation-delay: 0.40s; }
+
+/* ═══════════════════════════════════════════════════
+   BREAKPOINT: md (≤ 768px) — Tablet & Large Mobile
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* Sidebar becomes overlay */
+  .sidebar {
+    left: -260px;
+    z-index: 200;
+    box-shadow: none;
+  }
+  .sidebar.sidebar-open {
+    left: 0;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+  }
+
+  /* Backdrop visible on mobile */
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 195;
+    animation: backdropIn 0.25s ease forwards;
+  }
+
+  /* Main content takes full width */
+  .main-content {
+    margin-left: 0 !important;
+  }
+
+  /* Hamburger visible */
+  .hamburger-btn {
+    display: flex;
+  }
+
+  /* Desktop toggle button hidden */
+  .sidebar-toggle-btn {
+    display: none;
+  }
+
+  /* Hide "Profil Saya" text on mobile topbar */
+  .topbar-name {
+    display: none;
+  }
+
+  /* Grid columns collapse */
+  .grid-responsive-5,
+  .grid-responsive-4,
+  .grid-responsive-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Page padding smaller */
+  .page-content {
+    padding: 16px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   BREAKPOINT: sm (≤ 640px) — Small Mobile
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  /* All grids → 1 column */
+  .grid-responsive-5,
+  .grid-responsive-4,
+  .grid-responsive-3,
+  .grid-responsive-2 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Page padding minimal */
+  .page-content {
+    padding: 12px;
+  }
+
+  /* Reduce stat card padding */
+  .stat-card {
+    padding: 14px 16px;
+  }
+
+  /* Reduce card-style padding */
+  .table-card {
+    border-radius: 12px;
+  }
+
+  /* Modal full screen on mobile */
+  .modal-content {
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetDashboardStats } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
@@ -8,9 +9,9 @@ const IconChart    = () => <svg width="18" height="18" viewBox="0 0 24 24" fill=
 const IconClipboard= () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" strokeWidth="2"/><rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="2"/></svg>;
 
 const MENU = [
-  { path: '/dashboard/ketua-pokja', label: 'Dashboard', icon: <IconHome /> },
-  { path: '/dashboard/ketua-pokja/monitoring', label: 'Monitoring', icon: <IconChart /> },
-  { path: '/dashboard/ketua-pokja/evaluasi', label: 'Evaluasi', icon: <IconClipboard /> },
+  { path: '/pokja/dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { path: '/pokja/monitoring', label: 'Monitoring', icon: <IconChart /> },
+  { path: '/pokja/evaluasi', label: 'Evaluasi', icon: <IconClipboard /> },
 ];
 
 function StatCard({ label, value, color, icon, desc, delay = 0 }) {
@@ -47,19 +48,23 @@ function DashboardKetuaPokja() {
 
   const nama = localStorage.getItem('simbima_nama') || 'Ketua Pokja';
 
-  useEffect(() => {
+  const fetchStats = (isPoll = false) => {
+    if (!isPoll) setLoading(true);
     apiGetDashboardStats()
       .then(res => {
         if (res.data?.statistik) setStats(res.data.statistik);
-        else setError(res.message || 'Gagal memuat data.');
+        else if (!isPoll) setError(res.message || 'Gagal memuat data.');
       })
-      .catch(() => setError('Tidak bisa terhubung ke server.'))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => { if (!isPoll) setError('Tidak bisa terhubung ke server.'); })
+      .finally(() => { if (!isPoll) setLoading(false); });
+  };
+
+  useEffect(() => { fetchStats(false); }, []);
+  usePolling(() => fetchStats(true), 20000);
 
   return (
     <DashboardLayout menuItems={MENU}>
-      <div className="page-enter" style={{ padding: '32px' }}>
+      <div className="page-enter page-content">
 
         {/* Header */}
         <div className="section-animate" style={{ marginBottom: '32px' }}>

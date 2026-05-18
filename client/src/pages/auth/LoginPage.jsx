@@ -32,9 +32,10 @@ function LoginPage() {
 
         setTimeout(() => {
           const role = data.data.role;
-          if (role === 'MAHASISWA') navigate('/dashboard/mahasiswa');
-          else if (role === 'FASILITATOR') navigate('/dashboard/fasilitator');
-          else if (role === 'KETUA_POKJA') navigate('/dashboard/ketua-pokja');
+          if (role === 'MAHASISWA') navigate('/mahasiswa/dashboard');
+          else if (role === 'FASILITATOR') navigate('/fasilitator/dashboard');
+          else if (role === 'SUPERADMIN') navigate('/superadmin/dashboard');
+          else if (role === 'KETUA_POKJA') navigate('/pokja/dashboard');
         }, 1000);
 
       } else {
@@ -161,6 +162,10 @@ function LoginPage() {
                 </span>
             }
           </button>
+          
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+             <button type="button" onClick={() => navigate('/lupa-password')} style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Lupa Password?</button>
+          </div>
         </form>
 
         <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '28px', marginBottom: 0 }}>

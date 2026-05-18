@@ -70,6 +70,20 @@ const tambahEvaluasi = async (req, res) => {
 
     // (Opsional) Disini bisa ditambah fitur pengiriman Notifikasi otomatis ke Fasilitator
     // lewat tabel Notifikasi (sesuai schema yang kamu buat).
+    const truncateText = (text, maxLength) => {
+      if (text.length > maxLength) return text.substring(0, maxLength) + '...';
+      return text;
+    };
+
+    await prisma.notifikasi.create({
+      data: {
+        judul: "Catatan Evaluasi Baru dari Ketua Pokja",
+        pesan: truncateText(catatan_evaluasi, 100),
+        tipe_notifikasi: "INFO",
+        id_fasilitator: id_fasilitator,
+        id_referensi: evaluasiBaru.id_evaluasi
+      }
+    });
 
     res.status(201).json({
       status: "Sukses",
@@ -83,4 +97,38 @@ const tambahEvaluasi = async (req, res) => {
   }
 };
 
-module.exports = { getDashboardStats, tambahEvaluasi };
+// 3. Menampilkan Riwayat Evaluasi (Ketua Pokja)
+const getRiwayatEvaluasi = async (req, res) => {
+  try {
+    if (req.user.role !== "KETUA_POKJA") {
+      return res.status(403).json({ message: "Akses ditolak!" });
+    }
+
+    const { fasilitator_id } = req.query;
+    
+    let whereClause = { id_ketua_pokja: req.user.id };
+    if (fasilitator_id) {
+      whereClause.id_fasilitator = Number(fasilitator_id);
+    }
+
+    const riwayat = await prisma.evaluasiPembinaan.findMany({
+      where: whereClause,
+      include: {
+        fasilitator: { select: { nama: true } },
+        gedung: { select: { nama_gedung: true } }
+      },
+      orderBy: { tanggal_evaluasi: 'desc' }
+    });
+
+    res.json({
+      status: "Sukses",
+      message: "Riwayat evaluasi berhasil diambil",
+      data: riwayat
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Gagal memuat riwayat evaluasi." });
+  }
+};
+
+module.exports = { getDashboardStats, tambahEvaluasi, getRiwayatEvaluasi };

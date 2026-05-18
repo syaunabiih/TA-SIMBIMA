@@ -32,18 +32,16 @@ enum StatusRewardPunishment {
 
 enum JenisKegiatan {
   SHALAT_SUBUH
-  APEL_MALAM
-  KAJIAN
-  SENAM
-  GOTONG_ROYONG
+  ABSENSI_MALAM
+  KEGIATAN_PEMBINAAN
+  KEGIATAN_KEBERSAMAAN
+  KEGIATAN_AMA
   LAINNYA
 }
 
 enum StatusKegiatan {
-  TERJADWAL
   BERLANGSUNG
   SELESAI
-  DIBATALKAN
 }
 
 enum StatusTugas {
@@ -88,6 +86,8 @@ enum TipeNotifikasi {
   PERINGATAN
   PENGUMUMAN
   IZIN
+  FOTO_BERANGKAT
+  FOTO_PULANG
 }
 
 // ================= MODEL (TABEL) =================
@@ -200,7 +200,11 @@ model KegiatanPembinaan {
   waktu_selesai       DateTime  @db.Time
   lokasi              String
   jenis_kegiatan      JenisKegiatan
-  status_kegiatan     StatusKegiatan @default(TERJADWAL)
+  status_kegiatan     StatusKegiatan @default(BERLANGSUNG)
+
+  // QR Code Absensi
+  qr_token            String?   @unique
+  qr_expires_at       DateTime?
 
   // Foreign Keys
   id_gedung           Int
@@ -268,13 +272,20 @@ model RekapAbsensi {
   id_rekap            Int       @id @default(autoincrement())
   bulan               Int
   tahun               Int
+  // Periode berdasarkan rentang tanggal (update baru)
+  tanggal_mulai       DateTime? @db.Date
+  tanggal_selesai     DateTime? @db.Date
+  // Konfigurasi iqab
+  batas_alfa          Int?      // Batas minimum alfa untuk dapat iqab
+  pengumuman_iqab     String?   @db.Text
   total_kegiatan      Int
   total_hadir         Int
   total_izin          Int
   total_alpha         Int
-  persentase_kehadiran Decimal  @db.Decimal(5, 2) // Contoh: 98.50
+  persentase_kehadiran Decimal  @db.Decimal(5, 2)
   status_reward       StatusRewardPunishment
-  
+  status_iqab         String?   // DAPAT_IQAB | BEBAS_IQAB
+
   tanggal_generate    DateTime  @default(now())
   tanggal_publikasi   DateTime?
   status_publikasi    StatusPublikasi @default(DRAFT)
@@ -304,6 +315,8 @@ model Perizinan {
   durasi_hari         Int
   alasan              String    @db.Text
   dokumen_pendukung   String?   // URL File
+  foto_berangkat      String?   // URL foto bukti berangkat
+  foto_pulang         String?   // URL foto bukti pulang
   status_pengajuan    StatusPengajuan @default(MENUNGGU)
   
   tanggal_validasi    DateTime?
@@ -374,6 +387,7 @@ model Notifikasi {
   status_baca         Boolean   @default(false)
   tipe_notifikasi     TipeNotifikasi
   id_referensi        Int?      // ID Absensi, ID Izin, dll (Opsional)
+  link_tujuan         String?   // URL halaman tujuan navigasi
   dibaca_pada         DateTime?
 
   // Relasi Polimorfik (Optional Chaining)
@@ -387,7 +401,40 @@ model Notifikasi {
   id_ketua_pokja      Int?
   ketua_pokja         KetuaPokja? @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja])
 
-  created_at          DateTime  @default(now())
-
   @@map("notifikasi")
+}
+
+model TahunAkademik {
+  id_tahun    Int      @id @default(autoincrement())
+  nama        String   // contoh: "2024/2025"
+  semester    String   // "Ganjil" | "Genap"
+  is_aktif    Boolean  @default(false)
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("tahun_akademik")
+}
+
+model JenisKegiatanMaster {
+  id          Int      @id @default(autoincrement())
+  nama        String
+  kode        String   @unique  // Cocok dgn enum: SHALAT_SUBUH, ABSENSI_MALAM, dll
+  deskripsi   String?  @db.Text
+  is_aktif    Boolean  @default(true)
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("jenis_kegiatan_master")
+}
+
+model ResetToken {
+  id_token   Int      @id @default(autoincrement())
+  email      String   @unique
+  token      String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@map("reset_token")
 }

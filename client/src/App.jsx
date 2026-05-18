@@ -2,21 +2,46 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Import halaman-halaman
 import LoginPage from './pages/auth/LoginPage';
+import LupaPasswordPage from './pages/auth/LupaPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import ProfilUser from './pages/profil/ProfilUser';
 
 // Mahasiswa
 import DashboardMahasiswa from './pages/mahasiswa/DashboardMahasiswa';
 import KegiatanMahasiswa from './pages/mahasiswa/KegiatanMahasiswa';
 import PerizinanMahasiswa from './pages/mahasiswa/PerizinanMahasiswa';
+import IzinDetailPage from './pages/mahasiswa/IzinDetailPage';
+import FormAbsensiPetugas from './pages/mahasiswa/FormAbsensiPetugas';
+import RekapMahasiswa from './pages/mahasiswa/RekapMahasiswa';
+import NotifikasiMahasiswa from './pages/mahasiswa/NotifikasiMahasiswa';
 
 // Fasilitator
 import DashboardFasilitator from './pages/fasilitator/DashboardFasilitator';
 import KelolaKegiatanFasilitator from './pages/fasilitator/KelolaKegiatanFasilitator';
 import ValidasiIzinFasilitator from './pages/fasilitator/ValidasiIzinFasilitator';
+import MonitoringKepulanganFasilitator from './pages/fasilitator/MonitoringKepulanganFasilitator';
+import RekapFasilitator from './pages/fasilitator/RekapFasilitator';
+import GenerateRekapFasilitator from './pages/fasilitator/GenerateRekapFasilitator';
+import DetailRekapFasilitator from './pages/fasilitator/DetailRekapFasilitator';
+import NotifikasiFasilitator from './pages/fasilitator/NotifikasiFasilitator';
+import TambahKegiatanPage from './pages/fasilitator/TambahKegiatanPage';
+import PilihPetugasPage from './pages/fasilitator/PilihPetugasPage';
+import DetailKegiatanPage from './pages/fasilitator/DetailKegiatanPage';
+import PerluPerhatianPage from './pages/fasilitator/PerluPerhatianPage';
 
-// Ketua Pokja
+// Ketua Pokja (legacy)
 import DashboardKetuaPokja from './pages/ketuapokja/DashboardKetuaPokja';
 import MonitoringKetuaPokja from './pages/ketuapokja/MonitoringKetuaPokja';
 import EvaluasiKetuaPokja from './pages/ketuapokja/EvaluasiKetuaPokja';
+import RiwayatEvaluasiKetuaPokja from './pages/ketuapokja/RiwayatEvaluasiKetuaPokja';
+
+// Superadmin
+import SuperadminDashboard from './pages/superadmin/SuperadminDashboard';
+import MasterDataPage from './pages/superadmin/MasterDataPage';
+import KelolaAkunPage from './pages/superadmin/KelolaAkunPage';
+import MonitoringPage from './pages/superadmin/MonitoringPage';
+import RekapPage from './pages/superadmin/RekapPage';
+import PerizinanReadOnlyPage from './pages/superadmin/PerizinanReadOnlyPage';
 
 // Import guard
 import PrivateRoute from './components/PrivateRoute';
@@ -27,38 +52,111 @@ function App() {
       <Routes>
         {/* Halaman publik */}
         <Route path="/" element={<LoginPage />} />
+        <Route path="/lupa-password" element={<LupaPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        {/* ── PROFIL GLOBAL SEMUA ROLE ── */}
+        <Route path="/profil" element={<PrivateRoute allowedRoles={['MAHASISWA', 'FASILITATOR', 'KETUA_POKJA', 'SUPERADMIN']}><ProfilUser /></PrivateRoute>} />
 
         {/* ── MAHASISWA ── */}
-        <Route path="/dashboard/mahasiswa" element={
+        <Route path="/mahasiswa/dashboard" element={
           <PrivateRoute allowedRoles={['MAHASISWA']}><DashboardMahasiswa /></PrivateRoute>
         } />
-        <Route path="/dashboard/mahasiswa/kegiatan" element={
+        <Route path="/mahasiswa/kehadiran" element={
           <PrivateRoute allowedRoles={['MAHASISWA']}><KegiatanMahasiswa /></PrivateRoute>
         } />
-        <Route path="/dashboard/mahasiswa/izin" element={
+        <Route path="/mahasiswa/izin" element={
           <PrivateRoute allowedRoles={['MAHASISWA']}><PerizinanMahasiswa /></PrivateRoute>
+        } />
+        <Route path="/mahasiswa/izin/:id" element={
+          <PrivateRoute allowedRoles={['MAHASISWA']}><IzinDetailPage /></PrivateRoute>
+        } />
+        <Route path="/absensi/:kegiatan_id" element={
+          <PrivateRoute allowedRoles={['MAHASISWA']}><FormAbsensiPetugas /></PrivateRoute>
+        } />
+        <Route path="/mahasiswa/rekap" element={
+          <PrivateRoute allowedRoles={['MAHASISWA']}><RekapMahasiswa /></PrivateRoute>
+        } />
+        <Route path="/mahasiswa/notifikasi" element={
+          <PrivateRoute allowedRoles={['MAHASISWA']}><NotifikasiMahasiswa /></PrivateRoute>
         } />
 
         {/* ── FASILITATOR ── */}
-        <Route path="/dashboard/fasilitator" element={
+        <Route path="/fasilitator/dashboard" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><DashboardFasilitator /></PrivateRoute>
         } />
-        <Route path="/dashboard/fasilitator/kegiatan" element={
+        <Route path="/fasilitator/kegiatan" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><KelolaKegiatanFasilitator /></PrivateRoute>
         } />
-        <Route path="/dashboard/fasilitator/izin" element={
+        <Route path="/fasilitator/kegiatan/tambah" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><TambahKegiatanPage /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/kegiatan/tambah/petugas" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><PilihPetugasPage /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/kegiatan/:id" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><DetailKegiatanPage /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/perizinan" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><ValidasiIzinFasilitator /></PrivateRoute>
         } />
+        <Route path="/fasilitator/validasi-izin" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><ValidasiIzinFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/kepulangan" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><MonitoringKepulanganFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/rekap" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><RekapFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/rekap/generate" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><GenerateRekapFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/rekap/:bulan" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><DetailRekapFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/rekap/:bulan/:tahun" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><DetailRekapFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/notifikasi" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><NotifikasiFasilitator /></PrivateRoute>
+        } />
+        <Route path="/fasilitator/perlu-perhatian" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><PerluPerhatianPage /></PrivateRoute>
+        } />
 
-        {/* ── KETUA POKJA ── */}
-        <Route path="/dashboard/ketua-pokja" element={
+        {/* ── KETUA POKJA (legacy) ── */}
+        <Route path="/pokja/dashboard" element={
           <PrivateRoute allowedRoles={['KETUA_POKJA']}><DashboardKetuaPokja /></PrivateRoute>
         } />
-        <Route path="/dashboard/ketua-pokja/monitoring" element={
+        <Route path="/pokja/monitoring" element={
           <PrivateRoute allowedRoles={['KETUA_POKJA']}><MonitoringKetuaPokja /></PrivateRoute>
         } />
-        <Route path="/dashboard/ketua-pokja/evaluasi" element={
+        <Route path="/pokja/evaluasi" element={
           <PrivateRoute allowedRoles={['KETUA_POKJA']}><EvaluasiKetuaPokja /></PrivateRoute>
+        } />
+        <Route path="/pokja/evaluasi/riwayat" element={
+          <PrivateRoute allowedRoles={['KETUA_POKJA']}><RiwayatEvaluasiKetuaPokja /></PrivateRoute>
+        } />
+
+        {/* ── SUPERADMIN ── */}
+        <Route path="/superadmin/dashboard" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><SuperadminDashboard /></PrivateRoute>
+        } />
+        <Route path="/superadmin/master-data" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><MasterDataPage /></PrivateRoute>
+        } />
+        <Route path="/superadmin/akun" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><KelolaAkunPage /></PrivateRoute>
+        } />
+        <Route path="/superadmin/monitoring" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><MonitoringPage /></PrivateRoute>
+        } />
+        <Route path="/superadmin/rekap" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><RekapPage /></PrivateRoute>
+        } />
+        <Route path="/superadmin/perizinan" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><PerizinanReadOnlyPage /></PrivateRoute>
         } />
 
         {/* Fallback */}

@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
+import { usePolling } from '../../hooks/usePolling';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetIzin, apiAjukanIzin } from '../../utils/api';
 
 const IconHome = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
 const IconCalendar = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/></svg>;
 const IconFile = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/></svg>;
+const IconFileText = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2"/><polyline points="10 9 9 9 8 9" stroke="currentColor" strokeWidth="2"/></svg>;
 
 const MENU = [
-  { path: '/dashboard/mahasiswa', label: 'Dashboard', icon: <IconHome /> },
-  { path: '/dashboard/mahasiswa/kegiatan', label: 'Kegiatan', icon: <IconCalendar /> },
-  { path: '/dashboard/mahasiswa/izin', label: 'Perizinan', icon: <IconFile /> },
+  { path: '/mahasiswa/dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { path: '/mahasiswa/kehadiran', label: 'Kegiatan', icon: <IconCalendar /> },
+  { path: '/mahasiswa/izin', label: 'Perizinan', icon: <IconFile /> },
+  { path: '/mahasiswa/rekap', label: 'Rekap Absensi', icon: <IconFileText /> },
 ];
 
 function BadgeIzin({ status }) {
@@ -38,12 +42,15 @@ function inputStyle(focused) {
 const formatTgl = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
 function PerizinanMahasiswa() {
+  const navigate = useNavigate();
   const [izinList, setIzinList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [alert, setAlert] = useState(null);
   const [focusedField, setFocusedField] = useState('');
+  const [formError, setFormError] = useState(''); // error khusus dalam form
+  const [izinAktif, setIzinAktif] = useState(null);
 
   const [form, setForm] = useState({
     jenis_izin: 'PULANG_KAMPUNG',
@@ -51,35 +58,80 @@ function PerizinanMahasiswa() {
     tanggal_selesai: '',
     alasan: '',
   });
+  const [dokumen, setDokumen] = useState(null);
 
-  const fetchIzin = () => {
-    setLoading(true);
+  const fetchIzin = (isPoll = false) => {
+    if (!isPoll) setLoading(true);
     apiGetIzin()
-      .then(res => { if (res.data) setIzinList(res.data); })
-      .finally(() => setLoading(false));
+      .then(res => { 
+        if (res.data) {
+          setIzinList(res.data);
+          const aktif = res.data.find(izin => 
+            ['MENUNGGU', 'DISETUJUI'].includes(izin.status_pengajuan) &&
+            new Date(izin.tanggal_selesai) >= new Date(new Date().setHours(0,0,0,0))
+          );
+          setIzinAktif(aktif || null);
+        }
+      })
+      .finally(() => { if (!isPoll) setLoading(false); });
   };
 
-  useEffect(() => { fetchIzin(); }, []);
+  useEffect(() => { fetchIzin(false); }, []);
+  usePolling(() => fetchIzin(true), 10000);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    const res = await apiAjukanIzin(form);
+
+    // [Validasi 3] Dokumen wajib untuk Kegiatan Luar
+    if (form.jenis_izin === 'KEGIATAN_LUAR' && !dokumen) {
+      setAlert({ type: 'error', msg: 'Dokumen pendukung wajib dilampirkan untuk izin Kegiatan Luar.' });
+      setSubmitting(false);
+      setTimeout(() => setAlert(null), 4000);
+      return;
+    }
+
+    const start = new Date(form.tanggal_mulai);
+    const end = new Date(form.tanggal_selesai);
+    const diffTime = Math.abs(end - start);
+    const durasi_hari = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    const formData = new FormData();
+    formData.append('jenis_izin', form.jenis_izin);
+    formData.append('tanggal_mulai', form.tanggal_mulai);
+    formData.append('tanggal_selesai', form.tanggal_selesai);
+    formData.append('alasan', form.alasan);
+    formData.append('durasi_hari', durasi_hari);
+    if (dokumen) {
+      formData.append('dokumen_pendukung', dokumen);
+    }
+
+    const res = await apiAjukanIzin(formData);
     setSubmitting(false);
     if (res.status === 'Sukses') {
+      setFormError('');
       setAlert({ type: 'success', msg: 'Pengajuan izin berhasil dikirim!' });
       setShowForm(false);
       setForm({ jenis_izin: 'PULANG_KAMPUNG', tanggal_mulai: '', tanggal_selesai: '', alasan: '' });
+      setDokumen(null);
       fetchIzin();
+      setTimeout(() => setAlert(null), 5000);
     } else {
-      setAlert({ type: 'error', msg: res.message || 'Gagal mengajukan izin.' });
+      // Jangan tutup form / reset — tampilkan error di dalam form
+      setFormError(res.message || 'Gagal mengajukan izin.');
     }
-    setTimeout(() => setAlert(null), 4000);
   };
+
+  const todayObj = new Date();
+  const today = todayObj.toISOString().split('T')[0];
+  
+  const maxDateObj = new Date();
+  maxDateObj.setDate(todayObj.getDate() + 7);
+  const maxDate = maxDateObj.toISOString().split('T')[0];
 
   return (
     <DashboardLayout menuItems={MENU}>
-      <div className="page-enter" style={{ padding: '32px' }}>
+      <div className="page-enter page-content">
 
         {/* Header */}
         <div className="section-animate" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
@@ -105,8 +157,46 @@ function PerizinanMahasiswa() {
           </div>
         )}
 
-        {/* Form Pengajuan */}
+        {/* Form Pengajuan / BlockedState */}
         {showForm && (
+          izinAktif ? (
+            <div className="stat-card card-animate card-animate-1" style={{ marginBottom: '24px', padding: '40px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '64px', marginBottom: '16px', lineHeight: 1 }}>🚫</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b', margin: '0 0 12px' }}>Tidak Dapat Mengajukan Izin Baru</h2>
+              <p style={{ color: '#64748b', fontSize: '15px', maxWidth: '400px', margin: '0 auto 24px', lineHeight: 1.6 }}>
+                Kamu masih memiliki pengajuan izin yang aktif atau sedang berjalan. Selesaikan atau batalkan terlebih dahulu sebelum mengajukan izin baru.
+              </p>
+              
+              <div style={{ 
+                background: '#fef3c7', border: '1px solid #d97706', borderRadius: '12px',
+                padding: '16px', margin: '0 auto 24px', maxWidth: '360px', textAlign: 'left'
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: '600', color: '#d97706', textTransform: 'uppercase', marginBottom: '8px' }}>Izin Aktif Saat Ini</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#92400e', fontSize: '14px' }}>{izinAktif.jenis_izin.replace('_', ' ')}</strong>
+                  <BadgeIzin status={izinAktif.status_pengajuan} />
+                </div>
+                <div style={{ color: '#b45309', fontSize: '13px' }}>
+                  {formatTgl(izinAktif.tanggal_mulai)} – {formatTgl(izinAktif.tanggal_selesai)}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button 
+                  onClick={() => setShowForm(false)} 
+                  style={{ background: 'transparent', border: 'none', color: '#64748b', fontWeight: '600', padding: '10px 16px', cursor: 'pointer' }}
+                >
+                  Tutup
+                </button>
+                <button 
+                  onClick={() => navigate(`/mahasiswa/izin/${izinAktif.id_perizinan}`)}
+                  style={{ background: 'transparent', border: '1px solid #01696f', color: '#01696f', fontWeight: '600', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  Lihat Detail Izin
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="stat-card card-animate card-animate-1" style={{ marginBottom: '24px', padding: '24px' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '600', color: '#1e293b' }}>Form Pengajuan Izin</h3>
             <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -121,13 +211,26 @@ function PerizinanMahasiswa() {
               </div>
               <div>
                 <label style={{ display: 'block', color: '#475569', fontSize: '13px', fontWeight: '500', marginBottom: '6px' }}>Tanggal Mulai</label>
-                <input type="date" value={form.tanggal_mulai} onChange={e => setForm({ ...form, tanggal_mulai: e.target.value })}
+                <input type="date" value={form.tanggal_mulai}
+                  min={today}
+                  max={maxDate}
+                  onChange={e => {
+                    const newMulai = e.target.value;
+                    // [Validasi 2] Reset tanggal selesai jika lebih awal dari mulai baru
+                    setForm(prev => ({
+                      ...prev,
+                      tanggal_mulai: newMulai,
+                      tanggal_selesai: prev.tanggal_selesai && prev.tanggal_selesai < newMulai ? '' : prev.tanggal_selesai,
+                    }));
+                  }}
                   onFocus={() => setFocusedField('tgl1')} onBlur={() => setFocusedField('')}
                   style={inputStyle(focusedField === 'tgl1')} required />
               </div>
               <div>
                 <label style={{ display: 'block', color: '#475569', fontSize: '13px', fontWeight: '500', marginBottom: '6px' }}>Tanggal Selesai</label>
-                <input type="date" value={form.tanggal_selesai} onChange={e => setForm({ ...form, tanggal_selesai: e.target.value })}
+                <input type="date" value={form.tanggal_selesai}
+                  min={form.tanggal_mulai || today}
+                  onChange={e => setForm({ ...form, tanggal_selesai: e.target.value })}
                   onFocus={() => setFocusedField('tgl2')} onBlur={() => setFocusedField('')}
                   style={inputStyle(focusedField === 'tgl2')} required />
               </div>
@@ -139,6 +242,39 @@ function PerizinanMahasiswa() {
                   style={{ ...inputStyle(focusedField === 'alasan'), resize: 'vertical' }} required />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', color: '#475569', fontSize: '13px', fontWeight: '500', marginBottom: '6px' }}>
+                  Dokumen Pendukung
+                  {form.jenis_izin === 'KEGIATAN_LUAR'
+                    ? <span> <span style={{ color: '#dc2626' }}>*</span> <span style={{ color: '#dc2626', fontWeight: '600' }}>(Wajib)</span></span>
+                    : ' (Opsional)'
+                  }
+                </label>
+                <input type="file" onChange={e => setDokumen(e.target.files[0])} accept="image/*,application/pdf"
+                  onFocus={() => setFocusedField('dok')} onBlur={() => setFocusedField('')}
+                  style={inputStyle(focusedField === 'dok')} />
+                {form.jenis_izin === 'KEGIATAN_LUAR' ? (
+                  <span style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', display: 'block', fontWeight: '500' }}>
+                    ⚠ Surat izin/undangan wajib dilampirkan
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Format: JPG, PNG, PDF. Maks 5MB</span>
+                )}
+              </div>
+
+              {/* Error dari server (overlap, kuota, dll) */}
+              {formError && (
+                <div style={{
+                  gridColumn: '1 / -1',
+                  background: '#fef2f2', border: '1px solid #fecaca',
+                  borderRadius: '10px', padding: '10px 14px',
+                  display: 'flex', alignItems: 'flex-start', gap: '8px',
+                }}>
+                  <span style={{ color: '#dc2626', fontWeight: '700', flexShrink: 0 }}>⚠</span>
+                  <span style={{ color: '#dc2626', fontSize: '13px', lineHeight: 1.5 }}>{formError}</span>
+                </div>
+              )}
+
+              <div style={{ gridColumn: '1 / -1' }}>
                 <button type="submit" disabled={submitting} className="btn-cta" style={{
                   width: '100%', padding: '12px', justifyContent: 'center', fontSize: '15px', borderRadius: '10px',
                   opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer',
@@ -148,6 +284,7 @@ function PerizinanMahasiswa() {
               </div>
             </form>
           </div>
+          )
         )}
 
         {/* Tabel Riwayat */}
@@ -179,7 +316,14 @@ function PerizinanMahasiswa() {
                 </thead>
                 <tbody>
                   {izinList.map((iz, i) => (
-                    <tr key={iz.id_perizinan} className="table-row row-animate" style={{ animationDelay: `${0.04 * i}s` }}>
+                    <tr
+                      key={iz.id_perizinan}
+                      className="table-row row-animate"
+                      style={{ animationDelay: `${0.04 * i}s`, cursor: 'pointer' }}
+                      onClick={() => navigate(`/mahasiswa/izin/${iz.id_perizinan}`)}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = ''}
+                    >
                       <td style={{ padding: '14px 16px', color: '#1e293b', fontWeight: '500' }}>{iz.jenis_izin.replace('_', ' ')}</td>
                       <td style={{ padding: '14px 16px', color: '#64748b' }}>{formatTgl(iz.tanggal_mulai)}</td>
                       <td style={{ padding: '14px 16px', color: '#64748b' }}>{formatTgl(iz.tanggal_selesai)}</td>

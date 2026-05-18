@@ -1,22 +1,17 @@
 const express = require("express");
-const { login } = require("../controllers/authController");
+const { login, requestResetPassword, processResetPassword, getProfile, updateProfile, changePassword } = require("../controllers/authController");
 const { verifyToken } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
-// Rute untuk Login (Bebas akses)
+// 1. Rute Public
 router.post("/login", login);
+router.post("/lupa-password", requestResetPassword);
+router.post("/reset-password", processResetPassword);
 
-// Rute untuk Reset Password (Bebas akses)
-router.post("/reset-password", resetPassword);
-
-// Rute untuk mengecek profil user yang sedang login (Wajib pakai token)
-router.get("/me", verifyToken, (req, res) => {
-  res.json({
-    status: "Sukses",
-    message: "Akses berhasil karena token valid",
-    user_terverifikasi: req.user // Ini akan menampilkan { id, role, iat, exp }
-  });
-});
+// 2. Rute Private (Butuh Token)
+router.get("/profil", verifyToken, getProfile);
+router.put("/profil", verifyToken, updateProfile);
+router.put("/profil/password", verifyToken, changePassword);
 
 module.exports = router;

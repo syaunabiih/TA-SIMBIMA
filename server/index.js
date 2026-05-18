@@ -1,8 +1,10 @@
 // index.js
+process.env.TZ = 'Asia/Jakarta';
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
+const path = require("path");
 
 dotenv.config();
 
@@ -16,6 +18,8 @@ const monitoringRoutes = require("./routes/monitoringRoutes");
 const mahasiswaRoutes = require("./routes/mahasiswaRoutes");
 const rekapRoutes = require("./routes/rekapRoutes");
 const notifikasiRoutes = require("./routes/notifikasiRoutes");
+const dashboardRoutes  = require("./routes/dashboardRoutes");
+const adminRoutes      = require("./routes/adminRoutes");
 
 // Middleware
 app.use(cors());
@@ -27,6 +31,11 @@ app.use("/api/monitoring", monitoringRoutes);
 app.use("/api/mahasiswa", mahasiswaRoutes);
 app.use("/api/rekap", rekapRoutes);
 app.use("/api/notifikasi", notifikasiRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes);
+
+// Folder statis untuk penyimpanan file bukti
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Test Route (Cek apakah server jalan)
 app.get("/", (req, res) => {
@@ -68,12 +77,29 @@ server.on("error", (err) => {
   }
 });
 
-// Graceful shutdown saat Ctrl+C
+// Graceful shutdown saat Ctrl+C (SIGINT)
 process.on("SIGINT", async () => {
-  console.log("\n🛑 Server dimatikan...");
+  console.log("\n🛑 Server dimatikan (SIGINT)...");
   await prisma.$disconnect();
   server.close(() => {
     console.log("✅ Server berhasil dimatikan.");
     process.exit(0);
   });
 });
+
+// Graceful shutdown saat nodemon restart (SIGTERM)
+process.on("SIGTERM", async () => {
+  console.log("\n🔄 Nodemon restart — menutup server...");
+  await prisma.$disconnect();
+  server.close(() => {
+    process.exit(0);
+  });
+});
+
+// Graceful shutdown saat nodemon restart (SIGUSR2 — dipakai nodemon versi lama)
+process.once("SIGUSR2", async () => {
+  await prisma.$disconnect();
+  server.close(() => {
+    process.kill(process.pid, "SIGUSR2");
+  });
+});
