@@ -1,17 +1,65 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const fs = require('fs');
+const path = require('path');
+const { sendPush } = require('../utils/push');
+
+// Lazy-load io untuk menghindari circular dependency
+const getIO = () => require('../index').io;
+
+// Fungsi utilitas untuk auto-reject izin yang lewat H+1 dari tanggal_mulai
+const autoRejectExpiredIzin = async () => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const expiredIzins = await prisma.perizinan.findMany({
+      where: {
+        status_pengajuan: 'MENUNGGU',
+        tanggal_mulai: { lt: today }
+      }
+    });
+
+    if (expiredIzins.length > 0) {
+      const ids = expiredIzins.map(i => i.id_perizinan);
+      await prisma.perizinan.updateMany({
+        where: { id_perizinan: { in: ids } },
+        data: {
+          status_pengajuan: 'DITOLAK',
+          catatan_fasilitator: 'Ditolak otomatis oleh sistem: Melewati batas waktu validasi fasilitator (H+1 dari tanggal diajukan).'
+        }
+      });
+      
+      const notifPromises = expiredIzins.map(izin => 
+        prisma.notifikasi.create({
+          data: {
+            judul: `Status Pengajuan Izin: DITOLAK (Otomatis)`,
+            pesan: `Pengajuan izin Anda ditolak otomatis oleh sistem karena melewati batas waktu validasi (H+1 dari tanggal mulai).`,
+            tipe_notifikasi: "IZIN",
+            id_mahasiswa: izin.id_mahasiswa,
+            id_referensi: izin.id_perizinan,
+            link_tujuan: `/mahasiswa/izin/${izin.id_perizinan}`,
+          }
+        })
+      );
+      await Promise.all(notifPromises);
+    }
+  } catch (error) {
+    console.error("Auto reject error:", error);
+  }
+};
 
 // 0. Melihat Daftar Perizinan (multi-role)
 const getDaftarIzin = async (req, res) => {
   try {
+    await autoRejectExpiredIzin();
     const { id, role } = req.user;
+    const { status } = req.query; // support ?status=TERLAMBAT
     let whereClause = {};
 
     if (role === "MAHASISWA") {
-      // Mahasiswa hanya lihat izin miliknya sendiri
       whereClause = { id_mahasiswa: id };
     } else if (role === "FASILITATOR") {
-      // Fasilitator lihat semua izin di gedungnya
       const fasilitator = await prisma.fasilitator.findUnique({
         where: { id_fasilitator: id }
       });
@@ -22,6 +70,21 @@ const getDaftarIzin = async (req, res) => {
       }
     }
     // SUPERADMIN -> tidak ada filter, lihat semua perizinan
+
+    // Filter status TERLAMBAT (virtual): DISETUJUI + tanggal_selesai < now + returned_at null
+    if (status === 'TERLAMBAT') {
+      whereClause = {
+        ...whereClause,
+        status_pengajuan: 'DISETUJUI',
+        tanggal_selesai: { lt: new Date() },
+        returned_at: null,
+      };
+    } else if (status && status !== 'SEMUA') {
+      whereClause = {
+        ...whereClause,
+        status_pengajuan: status,
+      };
+    }
 
     const daftarIzin = await prisma.perizinan.findMany({
       where: whereClause,
@@ -127,8 +190,9 @@ const ajukanIzin = async (req, res) => {
     
     if (mhs && mhs.gedung && mhs.gedung.fasilitators) {
       const namaIzin = jenis_izin.replace('_', ' ').toLowerCase();
-      const notifPromises = mhs.gedung.fasilitators.map(fasil =>
-        prisma.notifikasi.create({
+      let notifPromises = [];
+      mhs.gedung.fasilitators.forEach(fasil => {
+        const notifPromise = prisma.notifikasi.create({
           data: {
             judul: `Pengajuan Izin Baru: ${mhs.nama}`,
             pesan: `${mhs.nama} mengajukan izin ${namaIzin} untuk ${durasi_hari} hari.`,
@@ -137,10 +201,24 @@ const ajukanIzin = async (req, res) => {
             id_referensi: izinBaru.id_perizinan,
             link_tujuan: '/fasilitator/validasi-izin',
           }
-        })
-      );
+        });
+        notifPromises.push(notifPromise);
+        
+        // Kirim Push Notification ke Fasilitator
+        console.log("[izinController] Mengirim push ke fasilitator:", fasil.id_fasilitator);
+        notifPromises.push(
+          sendPush({ id_fasilitator: fasil.id_fasilitator }, {
+            title: `Izin Baru: ${mhs.nama}`,
+            body: `${mhs.nama} mengajukan izin ${namaIzin} untuk ${durasi_hari} hari.`,
+            url: '/fasilitator/validasi-izin'
+          })
+        );
+      });
       await Promise.all(notifPromises);
     }
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("perizinan:update", { message: "Pengajuan izin baru" }); } catch (_) {}
 
     res.status(201).json({
       status: "Sukses",
@@ -212,7 +290,18 @@ const validasiIzin = async (req, res) => {
         link_tujuan: `/mahasiswa/izin/${izin.id_perizinan}`,
       }
     });
+
+    // Kirim Push Notification ke Mahasiswa
+    console.log("[izinController] Mengirim push ke mahasiswa:", izin.id_mahasiswa);
+    await sendPush({ id_mahasiswa: izin.id_mahasiswa }, {
+      title: `Izin ${status_pengajuan}`,
+      body: pesanNotif,
+      url: `/mahasiswa/izin/${izin.id_perizinan}`
+    });
     // ====================================================
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("perizinan:update", { message: "Status izin diperbarui" }); } catch (_) {}
 
     res.json({
       status: "Sukses",
@@ -315,6 +404,7 @@ const konfirmasiIzin = async (req, res) => {
 const getIzinDetail = async (req, res) => {
   const { id_perizinan } = req.params;
   try {
+    await autoRejectExpiredIzin();
     const izin = await prisma.perizinan.findUnique({
       where: { id_perizinan: Number(id_perizinan) },
       include: {
@@ -380,6 +470,9 @@ const uploadFotoBerangkat = async (req, res) => {
         })
       ));
     }
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("perizinan:update", { message: "Foto berangkat diupload" }); } catch (_) {}
 
     res.json({ status: "Sukses", message: "Foto bukti keberangkatan berhasil diupload.", data: updated });
   } catch (error) {
@@ -449,6 +542,9 @@ const uploadFotoPulang = async (req, res) => {
       ));
     }
 
+    // Emit realtime event ke semua client
+    try { getIO().emit("perizinan:update", { message: "Foto pulang diupload" }); } catch (_) {}
+
     res.json({ status: "Sukses", message: "Foto bukti kepulangan berhasil diupload.", data: updated });
   } catch (error) {
     console.error(error);
@@ -456,7 +552,50 @@ const uploadFotoPulang = async (req, res) => {
   }
 };
 
-// 7. Total Hari Izin Mahasiswa Bulan Ini (untuk fasilitator — ditampilkan di modal review)
+// 7. Summary Perizinan (untuk superadmin/fasilitator — stat cards)
+const getIzinSummary = async (req, res) => {
+  try {
+    const now = new Date();
+    const { id, role } = req.user;
+
+    // Tentukan filter gedung jika fasilitator
+    let gedungFilter = {};
+    if (role === 'FASILITATOR') {
+      const fasil = await prisma.fasilitator.findUnique({ where: { id_fasilitator: id } });
+      if (fasil) gedungFilter = { mahasiswa: { id_gedung: fasil.id_gedung } };
+    }
+
+    // Total mahasiswa aktif (sesuai scope gedung)
+    const totalMahasiswa = await prisma.mahasiswa.count({
+      where: role === 'FASILITATOR' ? { status_hunian: 'AKTIF', id_gedung: (await prisma.fasilitator.findUnique({ where: { id_fasilitator: id } }))?.id_gedung } : { status_hunian: 'AKTIF' },
+    });
+
+    // Sedang tidak di asrama: DISETUJUI dan belum kembali
+    const sedangTidakDiAsrama = await prisma.perizinan.count({
+      where: {
+        ...gedungFilter,
+        status_pengajuan: 'DISETUJUI',
+        returned_at: null,
+      },
+    });
+
+    const mahasiswaAda = totalMahasiswa - sedangTidakDiAsrama;
+
+    res.json({
+      status: 'Sukses',
+      data: {
+        totalMahasiswa,
+        sedangTidakDiAsrama,
+        adaDiAsrama: mahasiswaAda < 0 ? 0 : mahasiswaAda,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Gagal mengambil summary perizinan.' });
+  }
+};
+
+// 8. Total Hari Izin Mahasiswa Bulan Ini (untuk fasilitator — ditampilkan di modal review)
 const getTotalHariBulanIni = async (req, res) => {
   const { id_mahasiswa } = req.params;
   try {
@@ -514,6 +653,9 @@ const batalkanIzin = async (req, res) => {
       }
     });
 
+    // Emit realtime event ke semua client
+    try { getIO().emit("perizinan:update", { message: "Pengajuan dibatalkan" }); } catch (_) {}
+
     res.json({ status: "Sukses", message: "Pengajuan berhasil dibatalkan", data: updatedIzin });
 
   } catch (error) {
@@ -522,4 +664,48 @@ const batalkanIzin = async (req, res) => {
   }
 };
 
-module.exports = { getDaftarIzin, ajukanIzin, validasiIzin, konfirmasiIzin, getIzinDetail, uploadFotoBerangkat, uploadFotoPulang, getTotalHariBulanIni, batalkanIzin };
+// 9. Konfirmasi Kembali ke Asrama (oleh Fasilitator)
+const konfirmasiKembali = async (req, res) => {
+  const { id_perizinan } = req.params;
+  try {
+    const izin = await prisma.perizinan.findUnique({
+      where: { id_perizinan: Number(id_perizinan) },
+    });
+
+    if (!izin) return res.status(404).json({ message: 'Data perizinan tidak ditemukan.' });
+
+    if (izin.status_pengajuan !== 'DISETUJUI') {
+      return res.status(400).json({ message: 'Hanya izin berstatus DISETUJUI yang bisa dikonfirmasi kembali.' });
+    }
+
+    const updated = await prisma.perizinan.update({
+      where: { id_perizinan: Number(id_perizinan) },
+      data: {
+        returned_at: new Date(),
+        status_pengajuan: 'SELESAI',
+      },
+    });
+
+    // Notifikasi ke mahasiswa
+    await prisma.notifikasi.create({
+      data: {
+        judul: 'Konfirmasi Kembali ke Asrama',
+        pesan: 'Fasilitator telah mengkonfirmasi bahwa kamu sudah kembali ke asrama. Izinmu telah selesai.',
+        tipe_notifikasi: 'IZIN',
+        id_mahasiswa: izin.id_mahasiswa,
+        id_referensi: izin.id_perizinan,
+        link_tujuan: `/mahasiswa/izin/${izin.id_perizinan}`,
+      },
+    });
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("perizinan:update", { message: "Konfirmasi kembali asrama" }); } catch (_) {}
+
+    res.json({ status: 'Sukses', message: 'Konfirmasi kembali berhasil dicatat.', data: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Terjadi kesalahan saat konfirmasi kembali.' });
+  }
+};
+
+module.exports = { getDaftarIzin, ajukanIzin, validasiIzin, konfirmasiIzin, getIzinDetail, uploadFotoBerangkat, uploadFotoPulang, getTotalHariBulanIni, batalkanIzin, getIzinSummary, konfirmasiKembali };

@@ -226,6 +226,8 @@ const getMahasiswaList = async (req, res) => {
         kuota_izin_pulang: true,
         id_gedung: true,
         gedung: { select: { nama_gedung: true, kode_gedung: true } },
+        fakultas: { select: { nama: true } },
+        jurusan: { select: { nama: true } },
         created_at: true,
       },
       orderBy: [{ id_gedung: "asc" }, { lantai: "asc" }, { nomor_kamar: "asc" }],
@@ -243,144 +245,7 @@ const getMahasiswaList = async (req, res) => {
   }
 };
 
-/**
- * POST /api/admin/mahasiswa
- * Tambah akun mahasiswa baru
- * Body: { nama, nim, email, lantai, nomor_kamar, id_gedung, password, no_telp? }
- */
-const tambahMahasiswa = async (req, res) => {
-  const { nama, nim, email, lantai, nomor_kamar, id_gedung, password, no_telp } = req.body;
 
-  if (!nama || !nim || !email || !lantai || !nomor_kamar || !id_gedung || !password) {
-    return res.status(400).json({
-      message: "Field wajib: nama, nim, email, lantai, nomor_kamar, id_gedung, password",
-    });
-  }
-
-  try {
-    const existNim = await prisma.mahasiswa.findUnique({ where: { nim } });
-    if (existNim) return res.status(409).json({ message: "NIM sudah terdaftar." });
-
-    const existEmail = await prisma.mahasiswa.findUnique({ where: { email } });
-    if (existEmail) return res.status(409).json({ message: "Email sudah terdaftar." });
-
-    const gedung = await prisma.gedung.findUnique({ where: { id_gedung: Number(id_gedung) } });
-    if (!gedung) return res.status(404).json({ message: "Gedung tidak ditemukan." });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const mahasiswa = await prisma.mahasiswa.create({
-      data: {
-        nim,
-        nama,
-        email,
-        password: hashedPassword,
-        lantai: Number(lantai),
-        nomor_kamar,
-        no_telp: no_telp || null,
-        id_gedung: Number(id_gedung),
-      },
-      select: {
-        id_mahasiswa: true,
-        nim: true,
-        nama: true,
-        email: true,
-        lantai: true,
-        nomor_kamar: true,
-        id_gedung: true,
-        gedung: { select: { nama_gedung: true, kode_gedung: true } },
-        created_at: true,
-      },
-    });
-
-    res.status(201).json({
-      status: "Sukses",
-      message: "Mahasiswa berhasil ditambahkan",
-      data: mahasiswa,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Gagal menambahkan mahasiswa." });
-  }
-};
-
-/**
- * PUT /api/admin/mahasiswa/:id
- * Edit mahasiswa termasuk kamar
- */
-const editMahasiswa = async (req, res) => {
-  const id = Number(req.params.id);
-  const { nama, email, no_telp, lantai, nomor_kamar, id_gedung, password, status_hunian } = req.body;
-
-  try {
-    const exist = await prisma.mahasiswa.findUnique({ where: { id_mahasiswa: id } });
-    if (!exist) return res.status(404).json({ message: "Mahasiswa tidak ditemukan." });
-
-    const updateData = {};
-    if (nama) updateData.nama = nama;
-    if (email) updateData.email = email;
-    if (no_telp !== undefined) updateData.no_telp = no_telp;
-    if (lantai) updateData.lantai = Number(lantai);
-    if (nomor_kamar) updateData.nomor_kamar = nomor_kamar;
-    if (id_gedung) updateData.id_gedung = Number(id_gedung);
-    if (status_hunian) updateData.status_hunian = status_hunian;
-    if (password) updateData.password = await bcrypt.hash(password, 10);
-
-    const updated = await prisma.mahasiswa.update({
-      where: { id_mahasiswa: id },
-      data: updateData,
-      select: {
-        id_mahasiswa: true,
-        nim: true,
-        nama: true,
-        email: true,
-        lantai: true,
-        nomor_kamar: true,
-        status_hunian: true,
-        id_gedung: true,
-        gedung: { select: { nama_gedung: true, kode_gedung: true } },
-        updated_at: true,
-      },
-    });
-
-    res.json({
-      status: "Sukses",
-      message: "Data mahasiswa berhasil diperbarui",
-      data: updated,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Gagal memperbarui mahasiswa." });
-  }
-};
-
-/**
- * DELETE /api/admin/mahasiswa/:id
- * Hapus mahasiswa
- */
-const hapusMahasiswa = async (req, res) => {
-  const id = Number(req.params.id);
-
-  try {
-    const exist = await prisma.mahasiswa.findUnique({ where: { id_mahasiswa: id } });
-    if (!exist) return res.status(404).json({ message: "Mahasiswa tidak ditemukan." });
-
-    await prisma.mahasiswa.delete({ where: { id_mahasiswa: id } });
-
-    res.json({
-      status: "Sukses",
-      message: `Mahasiswa "${exist.nama}" berhasil dihapus.`,
-    });
-  } catch (error) {
-    console.error(error);
-    if (error.code === "P2003") {
-      return res.status(409).json({
-        message: "Mahasiswa tidak bisa dihapus karena masih memiliki data terkait (kehadiran/perizinan).",
-      });
-    }
-    res.status(500).json({ message: "Gagal menghapus mahasiswa." });
-  }
-};
 
 // ============================================================
 // DASHBOARD STATS (GLOBAL — semua gedung)
@@ -472,6 +337,70 @@ const getDashboardStats = async (req, res) => {
       orderBy: { kode_gedung: "asc" },
     });
 
+    // 7. Tren kehadiran global — 8 kegiatan terakhir (semua gedung, HANYA kegiatan wajib, berurut)
+    // Karena 1 kegiatan = 1 gedung, kita harus group berdasarkan tanggal_kegiatan dan jenis_kegiatan
+    const recentGroupsRaw = await prisma.kegiatanPembinaan.findMany({
+      where: {
+        tanggal_kegiatan: { lte: new Date() },
+        jenis_kegiatan: { is_wajib: true }
+      },
+      select: {
+        tanggal_kegiatan: true,
+        id_jenis_kegiatan: true,
+        jenis_kegiatan: { select: { nama_jenis: true } }
+      },
+      orderBy: { tanggal_kegiatan: 'desc' },
+      distinct: ['tanggal_kegiatan', 'id_jenis_kegiatan'],
+      take: 8
+    });
+
+    const formatTgl = (d) =>
+      new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+
+    const tren_kehadiran_global = await Promise.all(
+      recentGroupsRaw.map(async (group) => {
+        const kegiatans = await prisma.kegiatanPembinaan.findMany({
+          where: {
+            tanggal_kegiatan: group.tanggal_kegiatan,
+            id_jenis_kegiatan: group.id_jenis_kegiatan
+          },
+          include: {
+            kehadirans: { select: { status_kehadiran: true } }
+          }
+        });
+
+        let hadir = 0, alpha = 0, izin = 0, sakit = 0;
+        kegiatans.forEach(k => {
+          k.kehadirans.forEach(ab => {
+            if (ab.status_kehadiran === "HADIR") hadir++;
+            else if (ab.status_kehadiran === "ALPHA") alpha++;
+            else if (ab.status_kehadiran === "IZIN") izin++;
+            else if (ab.status_kehadiran === "SAKIT") sakit++;
+          });
+        });
+
+        const namaShort = group.jenis_kegiatan.nama_jenis.length > 16
+          ? group.jenis_kegiatan.nama_jenis.substring(0, 15) + "…"
+          : group.jenis_kegiatan.nama_jenis;
+
+        return {
+          id: `${group.tanggal_kegiatan.toISOString()}-${group.id_jenis_kegiatan}`,
+          label: namaShort,
+          tanggal: formatTgl(group.tanggal_kegiatan),
+          hadir,
+          alpha,
+          izin,
+          sakit,
+        };
+      })
+    );
+
+    // Balik urutan agar kronologis (dari kiri ke kanan di chart)
+    tren_kehadiran_global.reverse();
+
+    // 8. Total gedung
+    const totalGedung = await prisma.gedung.count();
+
     res.json({
       status: "Sukses",
       message: "Dashboard stats berhasil diambil",
@@ -479,8 +408,10 @@ const getDashboardStats = async (req, res) => {
         totalMahasiswa,
         totalFasilitator,
         totalKegiatan,
+        totalGedung,
         rataRataKehadiran,
         mahasiswaAlfaTerbanyak,
+        tren_kehadiran_global,
         distribusiGedung: distribusiGedung.map((g) => ({
           id_gedung: g.id_gedung,
           nama_gedung: g.nama_gedung,
@@ -496,6 +427,52 @@ const getDashboardStats = async (req, res) => {
     res.status(500).json({ message: "Gagal mengambil dashboard stats." });
   }
 };
+
+/**
+ * GET /api/admin/dashboard/kehadiran-per-gedung
+ * Return persentase kehadiran per asrama
+ */
+const getKehadiranPerGedung = async (req, res) => {
+  try {
+    const gedungAll = await prisma.gedung.findMany({
+      select: { id_gedung: true, nama_gedung: true },
+    });
+
+    const hasil = [];
+
+    for (const g of gedungAll) {
+      // Ambil absensi HANYA dari mahasiswa yang status_hunian = "AKTIF"
+      const absensiGedung = await prisma.kehadiran.findMany({
+        where: {
+          kegiatan: { id_gedung: g.id_gedung },
+          mahasiswa: { status_hunian: "AKTIF" },
+        },
+        select: { status_kehadiran: true },
+      });
+
+      const total = absensiGedung.length;
+      const hadir = absensiGedung.filter((a) => a.status_kehadiran === "HADIR").length;
+
+      const persentase = total > 0 ? parseFloat(((hadir / total) * 100).toFixed(1)) : 0;
+
+      hasil.push({
+        gedung: g.nama_gedung,
+        persentase,
+        hadir,
+        total,
+      });
+    }
+
+    // Urutkan berdasarkan persentase tertinggi
+    hasil.sort((a, b) => b.persentase - a.persentase);
+
+    res.json(hasil);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Gagal mengambil data kehadiran per gedung." });
+  }
+};
+
 
 /**
  * GET /api/admin/gedung
@@ -538,9 +515,9 @@ const getGedungList = async (req, res) => {
  * Tambah gedung baru
  */
 const tambahGedung = async (req, res) => {
-  const { nama_gedung, kode_gedung, alamat, jumlah_lantai, kapasitas_mahasiswa, status_gedung } = req.body;
+  const { nama_gedung, kode_gedung, jumlah_lantai, kapasitas_mahasiswa, status_gedung } = req.body;
 
-  if (!nama_gedung || !kode_gedung || !alamat || !jumlah_lantai || !kapasitas_mahasiswa) {
+  if (!nama_gedung || !kode_gedung || !jumlah_lantai || !kapasitas_mahasiswa) {
     return res.status(400).json({ message: "Semua field wajib diisi (kecuali status_gedung bisa default)." });
   }
 
@@ -555,7 +532,6 @@ const tambahGedung = async (req, res) => {
       data: {
         nama_gedung,
         kode_gedung,
-        alamat,
         jumlah_lantai: Number(jumlah_lantai),
         kapasitas_mahasiswa: Number(kapasitas_mahasiswa),
         status_gedung: status_gedung || "AKTIF",
@@ -579,7 +555,7 @@ const tambahGedung = async (req, res) => {
  */
 const editGedung = async (req, res) => {
   const id = Number(req.params.id);
-  const { nama_gedung, kode_gedung, alamat, jumlah_lantai, kapasitas_mahasiswa, status_gedung } = req.body;
+  const { nama_gedung, kode_gedung, jumlah_lantai, kapasitas_mahasiswa, status_gedung } = req.body;
 
   try {
     const exist = await prisma.gedung.findUnique({ where: { id_gedung: id } });
@@ -598,7 +574,6 @@ const editGedung = async (req, res) => {
     const updateData = {};
     if (nama_gedung) updateData.nama_gedung = nama_gedung;
     if (kode_gedung) updateData.kode_gedung = kode_gedung;
-    if (alamat) updateData.alamat = alamat;
     if (jumlah_lantai) updateData.jumlah_lantai = Number(jumlah_lantai);
     if (kapasitas_mahasiswa) updateData.kapasitas_mahasiswa = Number(kapasitas_mahasiswa);
     if (status_gedung) updateData.status_gedung = status_gedung;
@@ -639,7 +614,7 @@ const hapusGedung = async (req, res) => {
     if (!exist) return res.status(404).json({ message: "Gedung tidak ditemukan." });
 
     if (exist._count.mahasiswas > 0 || exist._count.fasilitators > 0) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         message: `Gedung tidak bisa dihapus karena masih ada ${exist._count.mahasiswas} mahasiswa dan ${exist._count.fasilitators} fasilitator terdaftar di dalamnya.`
       });
     }
@@ -665,7 +640,7 @@ const hapusGedung = async (req, res) => {
 
 const getTahunAkademik = async (req, res) => {
   try {
-    const list = await prisma.tahunAkademik.findMany({ orderBy: [{ nama: 'desc' }, { semester: 'asc' }] });
+    const list = await prisma.tahunAkademik.findMany({ orderBy: [{ nama: 'desc' }] });
     res.json({ status: 'Sukses', data: list });
   } catch (error) {
     console.error(error);
@@ -674,15 +649,22 @@ const getTahunAkademik = async (req, res) => {
 };
 
 const tambahTahunAkademik = async (req, res) => {
-  const { nama, semester } = req.body;
-  if (!nama || !semester) {
-    return res.status(400).json({ message: 'Field wajib: nama, semester.' });
+  const { nama, is_aktif } = req.body;
+  if (!nama) {
+    return res.status(400).json({ message: 'Field wajib: nama.' });
   }
   try {
-    const exist = await prisma.tahunAkademik.findFirst({ where: { nama, semester } });
-    if (exist) return res.status(409).json({ message: 'Tahun akademik dengan nama dan semester tersebut sudah ada.' });
+    const exist = await prisma.tahunAkademik.findUnique({ where: { nama } });
+    if (exist) return res.status(409).json({ message: 'Tahun akademik tersebut sudah ada.' });
 
-    const data = await prisma.tahunAkademik.create({ data: { nama, semester, is_aktif: false } });
+    if (is_aktif) {
+      const activeTA = await prisma.tahunAkademik.findFirst({ where: { is_aktif: true } });
+      if (activeTA) {
+        return res.status(400).json({ message: 'Silahkan nonaktif tahun akademik yang sedang aktif terlebih dahulu.' });
+      }
+    }
+
+    const data = await prisma.tahunAkademik.create({ data: { nama, is_aktif: is_aktif || false } });
     res.status(201).json({ status: 'Sukses', message: 'Tahun akademik berhasil ditambahkan.', data });
   } catch (error) {
     console.error(error);
@@ -692,14 +674,23 @@ const tambahTahunAkademik = async (req, res) => {
 
 const editTahunAkademik = async (req, res) => {
   const id = Number(req.params.id);
-  const { nama, semester } = req.body;
+  const { nama, is_aktif } = req.body;
   try {
     const exist = await prisma.tahunAkademik.findUnique({ where: { id_tahun: id } });
     if (!exist) return res.status(404).json({ message: 'Tahun akademik tidak ditemukan.' });
 
     const updateData = {};
     if (nama) updateData.nama = nama;
-    if (semester) updateData.semester = semester;
+    
+    if (is_aktif !== undefined && is_aktif !== exist.is_aktif) {
+      if (is_aktif === true) {
+        const activeTA = await prisma.tahunAkademik.findFirst({ where: { is_aktif: true } });
+        if (activeTA && activeTA.id_tahun !== id) {
+          return res.status(400).json({ message: 'Silahkan nonaktif tahun akademik yang sedang aktif terlebih dahulu.' });
+        }
+      }
+      updateData.is_aktif = is_aktif;
+    }
 
     const updated = await prisma.tahunAkademik.update({ where: { id_tahun: id }, data: updateData });
     res.json({ status: 'Sukses', message: 'Tahun akademik berhasil diperbarui.', data: updated });
@@ -718,7 +709,7 @@ const hapusTahunAkademik = async (req, res) => {
       return res.status(409).json({ message: 'Tahun akademik yang sedang aktif tidak bisa dihapus. Nonaktifkan terlebih dahulu.' });
     }
     await prisma.tahunAkademik.delete({ where: { id_tahun: id } });
-    res.json({ status: 'Sukses', message: `Tahun akademik "${exist.nama} ${exist.semester}" berhasil dihapus.` });
+    res.json({ status: 'Sukses', message: `Tahun akademik "${exist.nama}" berhasil dihapus.` });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Gagal menghapus tahun akademik.' });
@@ -735,62 +726,157 @@ const setAktifTahunAkademik = async (req, res) => {
     await prisma.tahunAkademik.updateMany({ data: { is_aktif: false } });
     const updated = await prisma.tahunAkademik.update({ where: { id_tahun: id }, data: { is_aktif: true } });
 
-    res.json({ status: 'Sukses', message: `"${updated.nama} ${updated.semester}" sekarang menjadi tahun akademik aktif.`, data: updated });
+    res.json({ status: 'Sukses', message: `"${updated.nama}" sekarang menjadi tahun akademik aktif.`, data: updated });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Gagal mengaktifkan tahun akademik.' });
   }
 };
 
-// ============================================================
-// JENIS KEGIATAN MASTER MANAGEMENT
-// ============================================================
-
-const getJenisKegiatanMaster = async (req, res) => {
+const setNonaktifTahunAkademik = async (req, res) => {
+  const id = Number(req.params.id);
   try {
-    const list = await prisma.jenisKegiatanMaster.findMany({ orderBy: { nama: 'asc' } });
-    res.json({ status: 'Sukses', data: list });
+    const exist = await prisma.tahunAkademik.findUnique({ where: { id_tahun: id } });
+    if (!exist) return res.status(404).json({ message: 'Tahun akademik tidak ditemukan.' });
+
+    const updated = await prisma.tahunAkademik.update({ where: { id_tahun: id }, data: { is_aktif: false } });
+
+    res.json({ status: 'Sukses', message: `"${updated.nama}" berhasil dinonaktifkan.`, data: updated });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: 'Gagal menonaktifkan tahun akademik.' });
+  }
+};
+
+// ============================================================
+// FAKULTAS MANAGEMENT
+// ============================================================
+const getFakultasList = async (req, res) => {
+  try {
+    const list = await prisma.fakultas.findMany({ orderBy: { nama: 'asc' } });
+    res.json({ status: 'Sukses', data: list });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal mengambil data fakultas.' });
+  }
+};
+
+const tambahFakultas = async (req, res) => {
+  const { nama } = req.body;
+  if (!nama) return res.status(400).json({ message: 'Nama fakultas wajib diisi.' });
+  try {
+    const exist = await prisma.fakultas.findUnique({ where: { nama } });
+    if (exist) return res.status(409).json({ message: 'Fakultas sudah ada.' });
+    const data = await prisma.fakultas.create({ data: { nama } });
+    res.status(201).json({ status: 'Sukses', message: 'Fakultas berhasil ditambahkan.', data });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menambahkan fakultas.' });
+  }
+};
+
+const editFakultas = async (req, res) => {
+  const id = Number(req.params.id);
+  const { nama } = req.body;
+  if (!nama) return res.status(400).json({ message: 'Nama fakultas wajib diisi.' });
+  try {
+    const exist = await prisma.fakultas.findUnique({ where: { nama } });
+    if (exist && exist.id_fakultas !== id) return res.status(409).json({ message: 'Fakultas sudah ada.' });
+    const updated = await prisma.fakultas.update({ where: { id_fakultas: id }, data: { nama } });
+    res.json({ status: 'Sukses', message: 'Fakultas berhasil diperbarui.', data: updated });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal memperbarui fakultas.' });
+  }
+};
+
+const hapusFakultas = async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    await prisma.fakultas.delete({ where: { id_fakultas: id } });
+    res.json({ status: 'Sukses', message: 'Fakultas berhasil dihapus.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menghapus fakultas. Pastikan tidak ada data yang terkait.' });
+  }
+};
+
+// ============================================================
+// JURUSAN MANAGEMENT
+// ============================================================
+const getJurusanList = async (req, res) => {
+  try {
+    const list = await prisma.jurusan.findMany({ include: { fakultas: true }, orderBy: { nama: 'asc' } });
+    res.json({ status: 'Sukses', data: list });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal mengambil data jurusan.' });
+  }
+};
+
+const tambahJurusan = async (req, res) => {
+  const { nama, id_fakultas } = req.body;
+  if (!nama || !id_fakultas) return res.status(400).json({ message: 'Nama dan Fakultas wajib diisi.' });
+  try {
+    const data = await prisma.jurusan.create({ data: { nama, id_fakultas: Number(id_fakultas) } });
+    res.status(201).json({ status: 'Sukses', message: 'Jurusan berhasil ditambahkan.', data });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menambahkan jurusan.' });
+  }
+};
+
+const editJurusan = async (req, res) => {
+  const id = Number(req.params.id);
+  const { nama, id_fakultas } = req.body;
+  if (!nama || !id_fakultas) return res.status(400).json({ message: 'Nama dan Fakultas wajib diisi.' });
+  try {
+    const updated = await prisma.jurusan.update({ where: { id_jurusan: id }, data: { nama, id_fakultas: Number(id_fakultas) } });
+    res.json({ status: 'Sukses', message: 'Jurusan berhasil diperbarui.', data: updated });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal memperbarui jurusan.' });
+  }
+};
+
+const hapusJurusan = async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    await prisma.jurusan.delete({ where: { id_jurusan: id } });
+    res.json({ status: 'Sukses', message: 'Jurusan berhasil dihapus.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menghapus jurusan. Pastikan tidak ada data yang terkait.' });
+  }
+};
+
+// ============================================================
+// JENIS KEGIATAN MANAGEMENT
+// ============================================================
+const getJenisKegiatanList = async (req, res) => {
+  try {
+    const list = await prisma.jenisKegiatan.findMany({ orderBy: { id_jenis_kegiatan: 'asc' } });
+    res.json({ status: 'Sukses', data: list });
+  } catch (error) {
     res.status(500).json({ message: 'Gagal mengambil data jenis kegiatan.' });
   }
 };
 
 const tambahJenisKegiatan = async (req, res) => {
-  const { nama, kode, deskripsi, is_aktif } = req.body;
-  if (!nama || !kode) {
-    return res.status(400).json({ message: 'Field wajib: nama, kode.' });
-  }
+  const { nama_jenis, is_wajib } = req.body;
+  if (!nama_jenis) return res.status(400).json({ message: 'Nama jenis kegiatan wajib diisi.' });
   try {
-    const exist = await prisma.jenisKegiatanMaster.findUnique({ where: { kode } });
-    if (exist) return res.status(409).json({ message: 'Kode jenis kegiatan sudah terdaftar.' });
-
-    const data = await prisma.jenisKegiatanMaster.create({
-      data: { nama, kode: kode.toUpperCase(), deskripsi: deskripsi || null, is_aktif: is_aktif !== false }
-    });
+    const exist = await prisma.jenisKegiatan.findUnique({ where: { nama_jenis } });
+    if (exist) return res.status(409).json({ message: 'Jenis kegiatan sudah ada.' });
+    const data = await prisma.jenisKegiatan.create({ data: { nama_jenis, is_wajib: is_wajib || false } });
     res.status(201).json({ status: 'Sukses', message: 'Jenis kegiatan berhasil ditambahkan.', data });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Gagal menambahkan jenis kegiatan.' });
   }
 };
 
 const editJenisKegiatan = async (req, res) => {
   const id = Number(req.params.id);
-  const { nama, deskripsi, is_aktif } = req.body;
+  const { nama_jenis, is_wajib } = req.body;
+  if (!nama_jenis) return res.status(400).json({ message: 'Nama jenis kegiatan wajib diisi.' });
   try {
-    const exist = await prisma.jenisKegiatanMaster.findUnique({ where: { id } });
-    if (!exist) return res.status(404).json({ message: 'Jenis kegiatan tidak ditemukan.' });
-
-    const updateData = {};
-    if (nama) updateData.nama = nama;
-    if (deskripsi !== undefined) updateData.deskripsi = deskripsi;
-    if (is_aktif !== undefined) updateData.is_aktif = Boolean(is_aktif);
-
-    const updated = await prisma.jenisKegiatanMaster.update({ where: { id }, data: updateData });
+    const exist = await prisma.jenisKegiatan.findUnique({ where: { nama_jenis } });
+    if (exist && exist.id_jenis_kegiatan !== id) return res.status(409).json({ message: 'Jenis kegiatan sudah ada.' });
+    const updated = await prisma.jenisKegiatan.update({ where: { id_jenis_kegiatan: id }, data: { nama_jenis, is_wajib: is_wajib || false } });
     res.json({ status: 'Sukses', message: 'Jenis kegiatan berhasil diperbarui.', data: updated });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Gagal memperbarui jenis kegiatan.' });
   }
 };
@@ -798,23 +884,11 @@ const editJenisKegiatan = async (req, res) => {
 const hapusJenisKegiatan = async (req, res) => {
   const id = Number(req.params.id);
   try {
-    const exist = await prisma.jenisKegiatanMaster.findUnique({ where: { id } });
-    if (!exist) return res.status(404).json({ message: 'Jenis kegiatan tidak ditemukan.' });
-
-    // Cek apakah kode ini dipakai di KegiatanPembinaan (enum check)
-    const dipakai = await prisma.kegiatanPembinaan.findFirst({
-      where: { jenis_kegiatan: exist.kode }
-    });
-    if (dipakai) {
-      return res.status(409).json({
-        message: `Jenis kegiatan "${exist.nama}" tidak bisa dihapus karena sudah digunakan di ${dipakai.nama_kegiatan} dan kemungkinan kegiatan lainnya.`
-      });
-    }
-
-    await prisma.jenisKegiatanMaster.delete({ where: { id } });
-    res.json({ status: 'Sukses', message: `Jenis kegiatan "${exist.nama}" berhasil dihapus.` });
+    const count = await prisma.kegiatanPembinaan.count({ where: { id_jenis_kegiatan: id } });
+    if (count > 0) return res.status(409).json({ message: 'Tidak dapat menghapus, jenis kegiatan ini sudah digunakan.' });
+    await prisma.jenisKegiatan.delete({ where: { id_jenis_kegiatan: id } });
+    res.json({ status: 'Sukses', message: 'Jenis kegiatan berhasil dihapus.' });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Gagal menghapus jenis kegiatan.' });
   }
 };
@@ -825,10 +899,8 @@ module.exports = {
   editFasilitator,
   hapusFasilitator,
   getMahasiswaList,
-  tambahMahasiswa,
-  editMahasiswa,
-  hapusMahasiswa,
   getDashboardStats,
+  getKehadiranPerGedung,
   getGedungList,
   tambahGedung,
   editGedung,
@@ -838,8 +910,20 @@ module.exports = {
   editTahunAkademik,
   hapusTahunAkademik,
   setAktifTahunAkademik,
-  getJenisKegiatanMaster,
+  setNonaktifTahunAkademik,
+  getFakultasList,
+  tambahFakultas,
+  editFakultas,
+  hapusFakultas,
+  getJurusanList,
+  tambahJurusan,
+  editJurusan,
+  hapusJurusan,
+  getJenisKegiatanList,
   tambahJenisKegiatan,
   editJenisKegiatan,
   hapusJenisKegiatan,
 };
+
+
+

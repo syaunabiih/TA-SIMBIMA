@@ -68,31 +68,31 @@ const IconLogOut = () => (
   </svg>
 );
 
-// Warna tema SUPERADMIN — Violet/Indigo Premium
+// Warna tema SUPERADMIN — Green/Emerald (sesuai fasilitator)
 const THEME = {
-  primary:        '#7c3aed',
-  primaryLight:   '#8b5cf6',
-  primaryGlow:    'rgba(124,58,237,0.18)',
-  primaryBg:      'linear-gradient(135deg, #ede9fe, #ddd6fe)',
-  sidebarBg:      '#0f0a1e',
-  sidebarBorder:  'rgba(139,92,246,0.15)',
-  textPrimary:    '#f1f5f9',
-  textMuted:      '#94a3b8',
-  activeBg:       'rgba(139,92,246,0.15)',
-  activeColor:    '#c4b5fd',
-  activeBorder:   'rgba(139,92,246,0.4)',
-  hoverBg:        'rgba(255,255,255,0.05)',
-  badgeBg:        'rgba(139,92,246,0.2)',
-  badgeColor:     '#c4b5fd',
-  badgeBorder:    'rgba(139,92,246,0.35)',
+  primary:        '#059669',
+  primaryLight:   '#10b981',
+  primaryGlow:    'rgba(16,185,129,0.3)',
+  primaryBg:      'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+  sidebarBg:      '#ffffff',
+  sidebarBorder:  '#e2e8f0',
+  textPrimary:    '#1e293b',
+  textMuted:      '#64748b',
+  activeBg:       'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+  activeColor:    '#059669',
+  activeBorder:   'rgba(16,185,129,0.25)',
+  hoverBg:        '#f8fafc',
+  badgeBg:        '#ecfdf5',
+  badgeColor:     '#059669',
+  badgeBorder:    '#a7f3d0',
 };
 
 const MENU_ITEMS = [
   { path: '/superadmin/dashboard',   label: 'Dashboard',      icon: <IconDashboard /> },
   { path: '/superadmin/master-data', label: 'Master Data',    icon: <IconDatabase /> },
-  { path: '/superadmin/akun',        label: 'Kelola Akun',    icon: <IconUsers /> },
+  { path: '/superadmin/mahasiswa',   label: 'Daftar Mahasiswa', icon: <IconUsers /> },
+  { path: '/superadmin/akun',        label: 'Kelola Akun Fasilitator', icon: <IconUsers /> },
   { path: '/superadmin/monitoring',  label: 'Monitoring',     icon: <IconActivity /> },
-  { path: '/superadmin/rekap',       label: 'Rekap Absensi',  icon: <IconFileText /> },
   { path: '/superadmin/perizinan',   label: 'Perizinan',      icon: <IconFileCheck /> },
 ];
 
@@ -152,7 +152,7 @@ function SuperadminLayout({ children }) {
         }}>
           <div style={{
             width: '40px', height: '40px', flexShrink: 0,
-            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
             borderRadius: '10px', display: 'flex',
             alignItems: 'center', justifyContent: 'center',
             boxShadow: `0 4px 16px ${THEME.primaryGlow}`,
@@ -187,7 +187,7 @@ function SuperadminLayout({ children }) {
             return (
               <button
                 key={item.path}
-                onClick={() => { navigate(item.path); setSidebarOpen(false); }}
+                onClick={() => { navigate(item.path); if (window.innerWidth <= 768) setSidebarOpen(false); }}
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -202,12 +202,13 @@ function SuperadminLayout({ children }) {
                   background: isActive ? THEME.activeBg : 'transparent',
                   color: isActive ? THEME.activeColor : THEME.textMuted,
                   fontSize: '14px',
-                  fontWeight: isActive ? '600' : '400',
+                  fontWeight: '600',
                   textAlign: 'left',
-                  transition: 'all 0.2s ease',
+                  transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease',
                   whiteSpace: 'nowrap',
+                  minHeight: '42px',
                 }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = THEME.hoverBg; e.currentTarget.style.color = THEME.textPrimary; }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = THEME.hoverBg; e.currentTarget.style.color = THEME.primary; }}
                 onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = THEME.textMuted; }}
               >
                 {isActive && (
@@ -219,17 +220,24 @@ function SuperadminLayout({ children }) {
                     width: '4px',
                     height: '24px',
                     borderRadius: '0 4px 4px 0',
-                    background: 'linear-gradient(180deg, #8b5cf6, #7c3aed)',
+                    background: 'linear-gradient(180deg, #10b981, #059669)',
                   }} />
                 )}
-                <span style={{
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   flexShrink: 0,
-                  transition: 'transform 0.2s ease',
-                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
                 }}>
-                  {item.icon}
-                </span>
-                <span>{item.label}</span>
+                  <span style={{
+                    display: 'flex',
+                  }}>
+                    {item.icon}
+                  </span>
+                </div>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
               </button>
             );
           })}
@@ -240,7 +248,7 @@ function SuperadminLayout({ children }) {
           {/* User card */}
           <div style={{
             padding: '10px 12px', marginBottom: '8px',
-            background: 'rgba(255,255,255,0.05)',
+            background: '#f8fafc',
             borderRadius: '10px',
             border: `1px solid ${THEME.sidebarBorder}`,
           }}>
@@ -270,7 +278,7 @@ function SuperadminLayout({ children }) {
               color: THEME.textMuted, fontSize: '14px', fontWeight: '400',
               transition: 'all 0.2s ease', whiteSpace: 'nowrap',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = THEME.hoverBg; e.currentTarget.style.color = THEME.textPrimary; }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#ecfdf5'; e.currentTarget.style.color = '#059669'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = THEME.textMuted; }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
@@ -300,7 +308,7 @@ function SuperadminLayout({ children }) {
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <main className="main-content" style={{ marginLeft: sidebarOpen ? '260px' : '0' }}>
+      <main className="main-content">
         {/* Top Navbar */}
         <header style={{
           height: '60px', background: '#ffffff', borderBottom: '1px solid #e2e8f0',
@@ -325,16 +333,16 @@ function SuperadminLayout({ children }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: '5px',
-              background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)',
+              background: THEME.primaryBg,
               color: THEME.primary, fontSize: '11px', fontWeight: '700',
               padding: '3px 10px', borderRadius: '20px',
-              border: '1px solid rgba(124,58,237,0.2)',
+              border: '1px solid rgba(16,185,129,0.25)',
               letterSpacing: '0.3px',
             }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill={THEME.primary}>
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
-              SUPERADMIN
+              KETUA POKJA
             </span>
           </div>
 
@@ -345,9 +353,9 @@ function SuperadminLayout({ children }) {
           >
             <div style={{
               width: '32px', height: '32px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)',
+              background: THEME.primaryBg,
               display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.primary,
-              border: `2px solid rgba(124,58,237,0.2)`,
+              border: `2px solid rgba(16,185,129,0.25)`,
             }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

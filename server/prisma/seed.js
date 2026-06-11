@@ -67,7 +67,6 @@ async function main() {
       data: {
         kode_gedung:          g.kode,
         nama_gedung:          g.nama,
-        alamat:               `Kompleks Asrama Universitas Andalas, Gedung ${g.nama}`,
         jumlah_lantai:        g.lantai,
         kapasitas_mahasiswa:  g.kapasitas,
       }
@@ -210,9 +209,9 @@ async function main() {
   });
 
   const kegiatanSampel = [
-    { nama:'Shalat Subuh Berjamaah',     jenis:'SHALAT_SUBUH',         tgl: new Date(thn,bln, 5), mulai:'05:00', selesai:'06:00', lokasi:'Musholla Asrama Oren', status:'SELESAI' },
-    { nama:'Absensi Malam',              jenis:'ABSENSI_MALAM',        tgl: new Date(thn,bln, 8), mulai:'21:00', selesai:'21:30', lokasi:'Koridor Gedung Oren', status:'BERLANGSUNG' },
-    { nama:'Kegiatan Pembinaan Karakter',jenis:'KEGIATAN_PEMBINAAN',   tgl: new Date(thn,bln,12), mulai:'19:30', selesai:'21:00', lokasi:'Aula Asrama Oren', status:'BERLANGSUNG' },
+    { nama:'Shalat Subuh Berjamaah',     jenis:'SUBUH_BERJAMAAH',      tgl: new Date(thn,bln, 5), mulai:'05:00', selesai:'06:00', lokasi:'Musholla Asrama Oren', status:'SELESAI' },
+    { nama:'Absensi Malam',              jenis:'ABSEN_MALAM',          tgl: new Date(thn,bln, 8), mulai:'21:00', selesai:'21:30', lokasi:'Koridor Gedung Oren', status:'BERLANGSUNG' },
+    { nama:'Kegiatan Pembinaan Karakter',jenis:'LAINNYA',              tgl: new Date(thn,bln,12), mulai:'19:30', selesai:'21:00', lokasi:'Aula Asrama Oren', status:'BERLANGSUNG' },
   ];
 
   for (const k of kegiatanSampel) {
@@ -225,7 +224,7 @@ async function main() {
     const kegiatanBaru = await prisma.kegiatanPembinaan.create({
       data: {
         nama_kegiatan:    k.nama,
-        jenis_kegiatan:   k.jenis,
+        jenisKegiatan:    k.jenis,
         tanggal_kegiatan: k.tgl,
         waktu_mulai:      new Date(1970, 0, 1, jm, jt, 0),
         waktu_selesai:    new Date(1970, 0, 1, sm, st, 0),

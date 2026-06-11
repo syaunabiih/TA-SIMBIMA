@@ -2,6 +2,9 @@ const { PrismaClient } = require("@prisma/client");
 const { randomUUID } = require("crypto");
 const prisma = new PrismaClient();
 
+// Lazy-load io untuk menghindari circular dependency
+const getIO = () => require('../index').io;
+
 // ── Auto-migrate: tambah kolom QR jika belum ada ─────────────────────────────
 let _qrColsChecked = false;
 async function ensureQrColumns() {
@@ -35,11 +38,12 @@ async function ensureQrColumns() {
   }
 }
 
-// 1. Fasilitator Membuat Jadwal Kegiatan & Menugaskan Petugas
+
+
 const buatKegiatan = async (req, res) => {
   const {
     nama_kegiatan, tanggal_kegiatan, waktu_mulai, waktu_selesai,
-    lokasi, jenis_kegiatan,
+    lokasi, id_jenis_kegiatan,
     qr_durasi_menit,      // Durasi QR aktif dalam menit (dari frontend)
     petugas,              // Format baru: [{ lantai, blok, id_mahasiswa }]
     id_mahasiswa_petugas, // Format lama: [id, id, ...]
@@ -60,9 +64,10 @@ const buatKegiatan = async (req, res) => {
       data: {
         nama_kegiatan,
         tanggal_kegiatan: tglKegiatan,
-        waktu_mulai:  new Date(`1970-01-01T${waktu_mulai}:00+07:00`),
+        waktu_mulai: new Date(`1970-01-01T${waktu_mulai}:00+07:00`),
         waktu_selesai: new Date(`1970-01-01T${(waktu_selesai || waktu_mulai)}:00+07:00`),
-        lokasi, jenis_kegiatan,
+        lokasi, 
+        id_jenis_kegiatan: id_jenis_kegiatan ? Number(id_jenis_kegiatan) : null,
         id_gedung: fasilitator.id_gedung,
         id_fasilitator,
       }
@@ -87,18 +92,18 @@ const buatKegiatan = async (req, res) => {
     if (Array.isArray(petugas) && petugas.length > 0) {
       await prisma.petugasAbsensi.createMany({
         data: petugas.map(p => ({
-          id_kegiatan:           kegiatanBaru.id_kegiatan,
-          id_mahasiswa:          Number(p.id_mahasiswa),
+          id_kegiatan: kegiatanBaru.id_kegiatan,
+          id_mahasiswa: Number(p.id_mahasiswa),
           lantai_tanggung_jawab: Number(p.lantai),
         }))
       });
       await prisma.notifikasi.createMany({
         data: petugas.map(p => ({
-          judul:           "Kamu Ditunjuk Sebagai Petugas Absensi",
-          pesan:           `Kamu ditunjuk sebagai petugas absensi untuk kegiatan "${nama_kegiatan}" pada ${tglFormatted} pukul ${waktu_mulai}. Pantau form absensi di dashboard kamu.`,
+          judul: "Kamu Ditunjuk Sebagai Petugas Absensi",
+          pesan: `Kamu ditunjuk sebagai petugas absensi untuk kegiatan "${nama_kegiatan}" pada ${tglFormatted} pukul ${waktu_mulai}. Pantau form absensi di dashboard kamu.`,
           tipe_notifikasi: "INFO",
-          id_mahasiswa:    Number(p.id_mahasiswa),
-          id_referensi:    kegiatanBaru.id_kegiatan,
+          id_mahasiswa: Number(p.id_mahasiswa),
+          id_referensi: kegiatanBaru.id_kegiatan,
         }))
       });
     }
@@ -106,21 +111,24 @@ const buatKegiatan = async (req, res) => {
     else if (Array.isArray(id_mahasiswa_petugas) && id_mahasiswa_petugas.length > 0) {
       await prisma.petugasAbsensi.createMany({
         data: id_mahasiswa_petugas.map(id_mhs => ({
-          id_kegiatan:           kegiatanBaru.id_kegiatan,
-          id_mahasiswa:          Number(id_mhs),
+          id_kegiatan: kegiatanBaru.id_kegiatan,
+          id_mahasiswa: Number(id_mhs),
           lantai_tanggung_jawab: Number(lantai_tanggung_jawab) || 1,
         }))
       });
       await prisma.notifikasi.createMany({
         data: id_mahasiswa_petugas.map(id_mhs => ({
-          judul:           "Kamu Ditunjuk Sebagai Petugas Absensi",
-          pesan:           `Kamu ditunjuk sebagai petugas absensi untuk kegiatan "${nama_kegiatan}" pada ${tglFormatted} pukul ${waktu_mulai}.`,
+          judul: "Kamu Ditunjuk Sebagai Petugas Absensi",
+          pesan: `Kamu ditunjuk sebagai petugas absensi untuk kegiatan "${nama_kegiatan}" pada ${tglFormatted} pukul ${waktu_mulai}.`,
           tipe_notifikasi: "INFO",
-          id_mahasiswa:    Number(id_mhs),
-          id_referensi:    kegiatanBaru.id_kegiatan,
+          id_mahasiswa: Number(id_mhs),
+          id_referensi: kegiatanBaru.id_kegiatan,
         }))
       });
     }
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("kegiatan:update", { message: "Kegiatan baru ditambahkan" }); } catch (_) {}
 
     res.status(201).json({
       status: "Sukses",
@@ -166,10 +174,13 @@ const getDaftarKegiatan = async (req, res) => {
             include: { mahasiswa: { select: { nama: true, nim: true, nomor_kamar: true } } }
           },
           fasilitator: { select: { nama: true } },
+          gedung: { select: { id_gedung: true, nama_gedung: true } },
+          jenis_kegiatan: { select: { id_jenis_kegiatan: true, nama_jenis: true, is_wajib: true } },
           // Untuk menghitung Total Hadir/Alpha di dashboard superadmin/fasilitator
           kehadirans: { select: { status_kehadiran: true } }
         }),
       },
+
       orderBy: [
         { tanggal_kegiatan: 'desc' },
         { waktu_mulai: 'desc' },
@@ -180,24 +191,24 @@ const getDaftarKegiatan = async (req, res) => {
     // Sederhanakan field kehadiran
     const result = isMahasiswa
       ? daftarKegiatan.map(k => ({
-          ...k,
-          status_kehadiran_saya: k.kehadirans?.[0]?.status_kehadiran ?? null,
-          kehadirans: undefined,
-        }))
+        ...k,
+        status_kehadiran_saya: k.kehadirans?.[0]?.status_kehadiran ?? null,
+        kehadirans: undefined,
+      }))
       : daftarKegiatan.map(k => {
-          let total_hadir = 0, total_alpha = 0;
-          if (k.kehadirans) {
-            total_hadir = k.kehadirans.filter(x => x.status_kehadiran === 'HADIR').length;
-            total_alpha = k.kehadirans.filter(x => x.status_kehadiran === 'ALPHA').length;
-          }
-          return {
-            ...k,
-            total_hadir,
-            total_alpha,
-            // we can remove kehadirans array to save bandwidth if needed, but let's keep it just in case, or remove to be efficient
-            kehadirans: undefined
-          };
-        });
+        let total_hadir = 0, total_alpha = 0;
+        if (k.kehadirans) {
+          total_hadir = k.kehadirans.filter(x => x.status_kehadiran === 'HADIR').length;
+          total_alpha = k.kehadirans.filter(x => x.status_kehadiran === 'ALPHA').length;
+        }
+        return {
+          ...k,
+          total_hadir,
+          total_alpha,
+          // we can remove kehadirans array to save bandwidth if needed, but let's keep it just in case, or remove to be efficient
+          kehadirans: undefined
+        };
+      });
 
     res.json({ status: "Sukses", data: result });
   } catch (error) {
@@ -253,7 +264,7 @@ const inputKehadiran = async (req, res) => {
     const totalMahasiswaSebenarnya = await prisma.mahasiswa.count({
       where: {
         id_gedung: cekPetugas.kegiatan.id_gedung,
-        lantai:    cekPetugas.lantai_tanggung_jawab,
+        lantai: cekPetugas.lantai_tanggung_jawab,
         nomor_kamar: blokPetugas ? { startsWith: blokPetugas } : undefined,
         status_hunian: "AKTIF"
       }
@@ -283,11 +294,14 @@ const inputKehadiran = async (req, res) => {
     // 5. Update status tugas mahasiswa ini menjadi "SELESAI"
     await prisma.petugasAbsensi.update({
       where: { id_petugas: cekPetugas.id_petugas },
-      data: { 
+      data: {
         status_tugas: "SELESAI",
         waktu_submit: new Date()
       }
     });
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("absensi:update", { message: "Data absensi diperbarui" }); } catch (_) {}
 
     res.status(201).json({
       status: "Sukses",
@@ -307,7 +321,7 @@ const getAbsensiForm = async (req, res) => {
 
   try {
     const id_user = req.user.id;
-    const role    = req.user.role;
+    const role = req.user.role;
 
     if (role !== "MAHASISWA") {
       return res.status(403).json({ message: "Akses ditolak! Hanya mahasiswa yang bisa menginput absen." });
@@ -330,7 +344,7 @@ const getAbsensiForm = async (req, res) => {
     }
 
     const lantaiPetugas = mhsPetugas.lantai;
-    const blokPetugas   = mhsPetugas.nomor_kamar?.[0]?.toUpperCase() || '';
+    const blokPetugas = mhsPetugas.nomor_kamar?.[0]?.toUpperCase() || '';
 
     const kegiatan = await prisma.kegiatanPembinaan.findUnique({
       where: { id_kegiatan: Number(id_kegiatan) },
@@ -349,17 +363,17 @@ const getAbsensiForm = async (req, res) => {
     // Serta join dengan data kehadiran (jika fasil sudah ngisi)
     const mahasiswa = await prisma.mahasiswa.findMany({
       where: {
-        id_gedung:    kegiatan.id_gedung,
-        lantai:       lantaiPetugas,
-        nomor_kamar:  blokPetugas ? { startsWith: blokPetugas } : undefined,
+        id_gedung: kegiatan.id_gedung,
+        lantai: lantaiPetugas,
+        nomor_kamar: blokPetugas ? { startsWith: blokPetugas } : undefined,
         status_hunian: "AKTIF"
       },
       select: {
         id_mahasiswa: true,
-        nim:          true,
-        nama:         true,
-        nomor_kamar:  true,
-        lantai:       true,
+        nim: true,
+        nama: true,
+        nomor_kamar: true,
+        lantai: true,
         kehadirans: {
           where: { id_kegiatan: Number(id_kegiatan) },
           select: { status_kehadiran: true }
@@ -384,18 +398,18 @@ const getAbsensiForm = async (req, res) => {
       status: "Sukses",
       data: {
         kegiatan: {
-          id_kegiatan:       kegiatan.id_kegiatan,
-          nama_kegiatan:     kegiatan.nama_kegiatan,
-          tanggal_kegiatan:  kegiatan.tanggal_kegiatan,
-          waktu_mulai:       kegiatan.waktu_mulai,
-          gedung:            kegiatan.gedung.nama_gedung,
-          lantai_tugas:      lantaiPetugas,
-          blok_tugas:        blokPetugas,       // UPDATE 3: tambah field blok
-          petugas_id:        cekPetugas.id_petugas,
-          status_tugas:      cekPetugas.status_tugas
+          id_kegiatan: kegiatan.id_kegiatan,
+          nama_kegiatan: kegiatan.nama_kegiatan,
+          tanggal_kegiatan: kegiatan.tanggal_kegiatan,
+          waktu_mulai: kegiatan.waktu_mulai,
+          gedung: kegiatan.gedung.nama_gedung,
+          lantai_tugas: lantaiPetugas,
+          blok_tugas: blokPetugas,       // UPDATE 3: tambah field blok
+          petugas_id: cekPetugas.id_petugas,
+          status_tugas: cekPetugas.status_tugas
         },
-        lantai:    lantaiPetugas,               // UPDATE 3: shortcut langsung
-        blok:      blokPetugas,
+        lantai: lantaiPetugas,               // UPDATE 3: shortcut langsung
+        blok: blokPetugas,
         mahasiswa: formattedMahasiswa
       }
     });
@@ -408,9 +422,9 @@ const getAbsensiForm = async (req, res) => {
 // 4. Edit (Update) Jadwal Kegiatan
 const editKegiatan = async (req, res) => {
   const { id_kegiatan } = req.params;
-  const { 
-    nama_kegiatan, deskripsi, tanggal_kegiatan, 
-    waktu_mulai, waktu_selesai, lokasi, jenis_kegiatan, status_kegiatan 
+  const {
+    nama_kegiatan, deskripsi, tanggal_kegiatan,
+    waktu_mulai, waktu_selesai, lokasi, id_jenis_kegiatan, status_kegiatan
   } = req.body;
 
   try {
@@ -430,10 +444,13 @@ const editKegiatan = async (req, res) => {
         waktu_mulai: waktu_mulai ? new Date(`1970-01-01T${waktu_mulai}:00+07:00`) : undefined,
         waktu_selesai: waktu_selesai ? new Date(`1970-01-01T${waktu_selesai}:00+07:00`) : undefined,
         lokasi,
-        jenis_kegiatan,
+        id_jenis_kegiatan: id_jenis_kegiatan ? Number(id_jenis_kegiatan) : undefined,
         status_kegiatan
       }
     });
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("kegiatan:update", { message: "Kegiatan diperbarui" }); } catch (_) {}
 
     res.json({
       status: "Sukses",
@@ -471,8 +488,8 @@ const hapusKegiatan = async (req, res) => {
     console.error(error);
     // Error handling jika kegiatan sudah memiliki data absensi (constraint)
     if (error.code === 'P2003') {
-      return res.status(400).json({ 
-        message: "Kegiatan tidak bisa dihapus karena sudah memiliki data absensi mahasiswa. Silakan ubah statusnya menjadi DIBATALKAN." 
+      return res.status(400).json({
+        message: "Kegiatan tidak bisa dihapus karena sudah memiliki data absensi mahasiswa. Silakan ubah statusnya menjadi DIBATALKAN."
       });
     }
     res.status(500).json({ message: "Terjadi kesalahan server saat menghapus kegiatan." });
@@ -577,8 +594,8 @@ const getKehadiranPerBlok = async (req, res) => {
     const mahasiswaList = await prisma.mahasiswa.findMany({
       where: {
         id_gedung,
-        lantai:       Number(lantai),
-        nomor_kamar:  { startsWith: blok.toUpperCase() },
+        lantai: Number(lantai),
+        nomor_kamar: { startsWith: blok.toUpperCase() },
         status_hunian: 'AKTIF',
       },
       select: { id_mahasiswa: true, nama: true, nim: true, nomor_kamar: true },
@@ -588,7 +605,7 @@ const getKehadiranPerBlok = async (req, res) => {
     // Ambil data kehadiran yang sudah diisi untuk kegiatan ini
     const kehadiranList = await prisma.kehadiran.findMany({
       where: {
-        id_kegiatan:  Number(id),
+        id_kegiatan: Number(id),
         id_mahasiswa: { in: mahasiswaList.map(m => m.id_mahasiswa) },
       },
       select: { id_kehadiran: true, id_mahasiswa: true, status_kehadiran: true },
@@ -602,11 +619,11 @@ const getKehadiranPerBlok = async (req, res) => {
 
     // Gabungkan
     const result = mahasiswaList.map(m => ({
-      id_mahasiswa:     m.id_mahasiswa,
-      nama:             m.nama,
-      nim:              m.nim,
-      nomor_kamar:      m.nomor_kamar,
-      id_kehadiran:     kehadiranMap[m.id_mahasiswa]?.id_kehadiran || null,
+      id_mahasiswa: m.id_mahasiswa,
+      nama: m.nama,
+      nim: m.nim,
+      nomor_kamar: m.nomor_kamar,
+      id_kehadiran: kehadiranMap[m.id_mahasiswa]?.id_kehadiran || null,
       status_kehadiran: kehadiranMap[m.id_mahasiswa]?.status || null,
     }));
 
@@ -638,21 +655,24 @@ const tutupPresensi = async (req, res) => {
 
     // 1. Update status kegiatan → SELESAI
     await prisma.kegiatanPembinaan.update({
-      where:  { id_kegiatan: Number(id) },
-      data:   { status_kegiatan: 'SELESAI' },
+      where: { id_kegiatan: Number(id) },
+      data: { status_kegiatan: 'SELESAI' },
     });
 
     // 2. Nonaktifkan semua petugas yang masih DITUGASKAN → TIDAK_MENGERJAKAN
     await prisma.petugasAbsensi.updateMany({
       where: {
-        id_kegiatan:  Number(id),
+        id_kegiatan: Number(id),
         status_tugas: 'DITUGASKAN',
       },
       data: { status_tugas: 'TIDAK_MENGERJAKAN' },
     });
 
+    // Emit realtime event ke semua client
+    try { getIO().emit("kegiatan:update", { message: "Presensi ditutup" }); } catch (_) {}
+
     res.json({
-      status:  'Sukses',
+      status: 'Sukses',
       message: 'Presensi kegiatan berhasil ditutup.',
     });
   } catch (error) {
@@ -682,11 +702,14 @@ const buatKehadiranFasil = async (req, res) => {
 
     const kehadiran = await prisma.kehadiran.create({
       data: {
-        id_kegiatan:      Number(id_kegiatan),
-        id_mahasiswa:     Number(id_mahasiswa),
+        id_kegiatan: Number(id_kegiatan),
+        id_mahasiswa: Number(id_mahasiswa),
         status_kehadiran: status_kehadiran,
       }
     });
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("absensi:update", { message: "Kehadiran fasil ditambah" }); } catch (_) {}
 
     res.status(201).json({ status: 'Sukses', message: 'Kehadiran berhasil ditambahkan.', data: kehadiran });
   } catch (error) {
@@ -720,8 +743,11 @@ const editKehadiranFasil = async (req, res) => {
 
     const updated = await prisma.kehadiran.update({
       where: { id_kehadiran: Number(id) },
-      data:  { status_kehadiran }
+      data: { status_kehadiran }
     });
+
+    // Emit realtime event ke semua client
+    try { getIO().emit("absensi:update", { message: "Kehadiran fasil diedit" }); } catch (_) {}
 
     res.json({ status: 'Sukses', message: 'Kehadiran berhasil diperbarui.', data: updated });
   } catch (error) {
@@ -822,8 +848,8 @@ const alfaOtomatis = async (req, res) => {
 
     await prisma.kehadiran.createMany({
       data: belumTercatat.map(m => ({
-        id_kegiatan:      Number(id),
-        id_mahasiswa:     m.id_mahasiswa,
+        id_kegiatan: Number(id),
+        id_mahasiswa: m.id_mahasiswa,
         status_kehadiran: 'ALPHA',
       }))
     });
@@ -875,10 +901,10 @@ const getQrToken = async (req, res) => {
     return res.json({
       status: 'Sukses',
       data: {
-        qr_token:      kegiatan.qr_token,
-        expires_at:    kegiatan.qr_expires_at,
+        qr_token: kegiatan.qr_token,
+        expires_at: kegiatan.qr_expires_at,
         nama_kegiatan: kegiatan.nama_kegiatan,
-        waktu_mulai:   kegiatan.waktu_mulai,
+        waktu_mulai: kegiatan.waktu_mulai,
         waktu_selesai: kegiatan.waktu_selesai,
       }
     });
@@ -953,19 +979,22 @@ const scanQr = async (req, res) => {
     const waktu_hadir = new Date();
     await prisma.kehadiran.create({
       data: {
-        id_kegiatan:      kegiatan.id_kegiatan,
+        id_kegiatan: kegiatan.id_kegiatan,
         id_mahasiswa,
         status_kehadiran: 'HADIR',
-        waktu_absen:      waktu_hadir,
+        waktu_absen: waktu_hadir,
       }
     });
 
+    // Emit realtime event ke semua client (update QR modal di fasilitator)
+    try { getIO().emit("absensi:update", { message: "Mahasiswa scan QR berhasil" }); } catch (_) {}
+
     return res.status(201).json({
-      status:  'Sukses',
+      status: 'Sukses',
       message: 'Berhasil! Kehadiran kamu telah tercatat.',
       data: {
         nama_kegiatan: kegiatan.nama_kegiatan,
-        waktu_hadir:   waktu_hadir.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        waktu_hadir: waktu_hadir.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       }
     });
   } catch (error) {

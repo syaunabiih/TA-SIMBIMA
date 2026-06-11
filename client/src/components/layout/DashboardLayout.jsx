@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiGetNotifikasi } from '../../utils/api';
+import { useSocket } from '../../hooks/useSocket';
+import { subscribePush } from '../../utils/pushSubscription';
 
 /**
  * DashboardLayout — Layout utama yang dipakai semua role (Light Theme)
@@ -22,7 +24,21 @@ function DashboardLayout({ menuItems, children }) {
       } catch (err) { }
     };
     fetchNotif();
+    
+    // Pastikan user subscribe ke push notification setiap kali masuk dashboard
+    subscribePush();
   }, [location.pathname]);
+
+  // ── Realtime: update badge saat ada perizinan baru/diupdate ───────────
+  const refetchNotif = useCallback(async () => {
+    try {
+      const res = await apiGetNotifikasi();
+      if (res?.data?.belum_dibaca !== undefined) {
+        setUnreadCount(res.data.belum_dibaca);
+      }
+    } catch (_) {}
+  }, []);
+  useSocket("perizinan:update", refetchNotif);
 
   const nama = localStorage.getItem('simbima_nama') || 'Pengguna';
   const role = localStorage.getItem('simbima_role') || '';
@@ -103,7 +119,7 @@ function DashboardLayout({ menuItems, children }) {
             return (
               <button
                 key={item.path}
-                onClick={() => { navigate(item.path); setSidebarOpen(false); }}
+                onClick={() => { navigate(item.path); if (window.innerWidth <= 768) setSidebarOpen(false); }}
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -112,7 +128,7 @@ function DashboardLayout({ menuItems, children }) {
                   padding: '10px 12px',
                   marginBottom: '4px',
                   borderRadius: '10px',
-                  border: 'none',
+                  border: '1px solid transparent',
                   cursor: 'pointer',
                   position: 'relative',
                   background: isActive
@@ -120,11 +136,12 @@ function DashboardLayout({ menuItems, children }) {
                     : 'transparent',
                   color: isActive ? '#059669' : '#64748b',
                   fontSize: '14px',
-                  fontWeight: isActive ? '600' : '500',
+                  fontWeight: '600',
                   textAlign: 'left',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease',
                   boxShadow: isActive ? 'inset 0 0 0 1px rgba(16,185,129,0.25)' : 'none',
                   whiteSpace: 'nowrap',
+                  minHeight: '42px',
                 }}
               >
                 {isActive && (
@@ -139,12 +156,19 @@ function DashboardLayout({ menuItems, children }) {
                     background: 'linear-gradient(180deg, #10b981, #059669)',
                   }} />
                 )}
-                <span style={{
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   flexShrink: 0,
-                  transition: 'transform 0.2s ease',
-                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                }}>{item.icon}</span>
-                <span>{item.label}</span>
+                }}>
+                  <span style={{
+                    display: 'flex',
+                  }}>{item.icon}</span>
+                </div>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
               </button>
             );
           })}
@@ -184,19 +208,19 @@ function DashboardLayout({ menuItems, children }) {
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <main className="main-content" style={{ marginLeft: sidebarOpen ? '260px' : '0' }}>
+      <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
         {/* Top Navbar */}
         <header style={{
             height: '60px', background: '#ffffff', borderBottom: '1px solid #e2e8f0',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px',
             position: 'sticky', top: 0, zIndex: 90, gap: '12px'
         }}>
-          {/* Hamburger (mobile only) */}
+          {/* Hamburger toggle untuk semua device */}
           <button
-            className="hamburger-btn"
+            className="hamburger-btn-desktop"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label="Toggle menu"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '8px' }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>

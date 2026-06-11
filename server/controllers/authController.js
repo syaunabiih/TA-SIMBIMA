@@ -13,7 +13,7 @@ const login = async (req, res) => {
   const { identifier, password } = req.body; 
 
   if (!identifier || !password) {
-    return res.status(400).json({ message: "NIM/NIP dan Password wajib diisi!" });
+    return res.status(400).json({ message: "NIM/NIP/Email dan Password wajib diisi!" });
   }
 
   try {
@@ -21,7 +21,14 @@ const login = async (req, res) => {
     let role = "";
 
     // Cek di tabel Mahasiswa
-    user = await prisma.mahasiswa.findUnique({ where: { nim: identifier } });
+    user = await prisma.mahasiswa.findFirst({
+      where: {
+        OR: [
+          { nim: identifier },
+          { email: identifier }
+        ]
+      }
+    });
     if (user) {
       if (user.status_hunian !== "AKTIF") {
         return res.status(403).json({ message: "Akun mahasiswa tidak aktif atau dalam masa skorsing." });
@@ -31,13 +38,27 @@ const login = async (req, res) => {
 
     // Cek di Fasilitator
     if (!user) {
-      user = await prisma.fasilitator.findUnique({ where: { nip: identifier } });
+      user = await prisma.fasilitator.findFirst({
+        where: {
+          OR: [
+            { nip: identifier },
+            { email: identifier }
+          ]
+        }
+      });
       if (user) role = "FASILITATOR";
     }
 
     // Cek di Ketua Pokja (bisa pakai nip ATAU username kolom nip)
     if (!user) {
-      user = await prisma.ketuaPokja.findUnique({ where: { nip: identifier } });
+      user = await prisma.ketuaPokja.findFirst({
+        where: {
+          OR: [
+            { nip: identifier },
+            { email: identifier }
+          ]
+        }
+      });
       if (user) role = "SUPERADMIN";
     }
 
@@ -56,6 +77,11 @@ const login = async (req, res) => {
       { expiresIn: "1d" } 
     );
 
+    let isFirstLogin = false;
+    if (role === "MAHASISWA" && user.is_first_login) {
+      isFirstLogin = true;
+    }
+
     res.json({
       status: "Sukses",
       message: "Login Berhasil",
@@ -64,6 +90,7 @@ const login = async (req, res) => {
         id: user.id_mahasiswa || user.id_fasilitator || user.id_ketua_pokja,
         nama: user.nama,
         role: role,
+        isFirstLogin: isFirstLogin
       },
     });
 
@@ -84,15 +111,36 @@ const resetPassword = async (req, res) => {
     let role = "";
 
     // Cari user di 3 tabel
-    user = await prisma.mahasiswa.findUnique({ where: { nim: identifier } });
+    user = await prisma.mahasiswa.findFirst({
+      where: {
+        OR: [
+          { nim: identifier },
+          { email: identifier }
+        ]
+      }
+    });
     if (user) {
       role = "MAHASISWA";
     } else {
-      user = await prisma.fasilitator.findUnique({ where: { nip: identifier } });
+      user = await prisma.fasilitator.findFirst({
+        where: {
+          OR: [
+            { nip: identifier },
+            { email: identifier }
+          ]
+        }
+      });
       if (user) {
         role = "FASILITATOR";
       } else {
-      user = await prisma.ketuaPokja.findUnique({ where: { nip: identifier } });
+        user = await prisma.ketuaPokja.findFirst({
+          where: {
+            OR: [
+              { nip: identifier },
+              { email: identifier }
+            ]
+          }
+        });
         if (user) role = "SUPERADMIN";
       }
     }
@@ -290,5 +338,39 @@ const processResetPassword = async (req, res) => {
 };
 
 
+// ==========================================
+// 8. Ganti Password Pertama Kali (First Login)
+// ==========================================
+const firstLoginPasswordChange = async (req, res) => {
+  const { passwordBaru } = req.body;
+  try {
+    const id = req.user.id;
+    const role = req.user.role;
+    
+    if (role !== "MAHASISWA") {
+      return res.status(403).json({ message: "Hanya mahasiswa yang dapat melakukan aksi ini." });
+    }
+
+    const user = await prisma.mahasiswa.findUnique({ where: { id_mahasiswa: id } });
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan." });
+
+    if (!user.is_first_login) {
+      return res.status(400).json({ message: "Akun ini sudah pernah mengganti password." });
+    }
+
+    const hashedPassword = await bcrypt.hash(passwordBaru, 10);
+    await prisma.mahasiswa.update({
+      where: { id_mahasiswa: id },
+      data: { password: hashedPassword, is_first_login: false }
+    });
+
+    res.json({ status: "Sukses", message: "Password berhasil diganti. Silakan lanjutkan login." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Gagal mengganti password." });
+  }
+};
+
+
 // Export fungsi-fungsi ke routes
-module.exports = { login, resetPassword, getProfile, updateProfile, changePassword, requestResetPassword, processResetPassword };
+module.exports = { login, resetPassword, getProfile, updateProfile, changePassword, requestResetPassword, processResetPassword, firstLoginPasswordChange };

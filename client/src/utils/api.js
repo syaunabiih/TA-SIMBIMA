@@ -180,10 +180,26 @@ export const apiGetTotalHariBulanIni = (id_mahasiswa) =>
     headers: authHeader(),
   }).then(res => res.json());
 
+export const apiGetIzinSummary = () =>
+  fetch(`${BASE_URL}/izin/summary`, {
+    headers: authHeader(),
+  }).then(res => res.json());
+
+export const apiKonfirmasiKembali = (id_perizinan) =>
+  fetch(`${BASE_URL}/izin/${id_perizinan}/konfirmasi-kembali`, {
+    method: 'PATCH',
+    headers: authHeader(),
+  }).then(res => res.json());
+
 // ─── MONITORING ───────────────────────────────────────────────────────────────
 
 export const apiGetDashboardStats = () =>
   fetch(`${BASE_URL}/monitoring/dashboard`, {
+    headers: authHeader(),
+  }).then(res => res.json());
+
+export const apiGetKehadiranPerGedung = () =>
+  fetch(`${BASE_URL}/admin/dashboard/kehadiran-per-gedung`, {
     headers: authHeader(),
   }).then(res => res.json());
 

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { usePolling } from '../../hooks/usePolling';
+import { useState, useEffect, useCallback } from 'react';
+import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetIzin, apiAjukanIzin } from '../../utils/api';
@@ -77,7 +77,10 @@ function PerizinanMahasiswa() {
   };
 
   useEffect(() => { fetchIzin(false); }, []);
-  usePolling(() => fetchIzin(true), 10000);
+
+  // ── Realtime: refresh saat ada update perizinan ────────────────────────────
+  const onPerizinanUpdate = useCallback(() => fetchIzin(true), []);
+  useSocket("perizinan:update", onPerizinanUpdate);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -249,15 +252,25 @@ function PerizinanMahasiswa() {
                     : ' (Opsional)'
                   }
                 </label>
-                <input type="file" onChange={e => setDokumen(e.target.files[0])} accept="image/*,application/pdf"
+                <input type="file" onChange={e => {
+                    const file = e.target.files[0];
+                    if (file && file.size > 2 * 1024 * 1024) {
+                      setFormError('Ukuran dokumen maksimal 2 MB.');
+                      e.target.value = null;
+                      setDokumen(null);
+                    } else {
+                      setFormError('');
+                      setDokumen(file);
+                    }
+                  }} accept="image/*,application/pdf"
                   onFocus={() => setFocusedField('dok')} onBlur={() => setFocusedField('')}
                   style={inputStyle(focusedField === 'dok')} />
                 {form.jenis_izin === 'KEGIATAN_LUAR' ? (
                   <span style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', display: 'block', fontWeight: '500' }}>
-                    ⚠ Surat izin/undangan wajib dilampirkan
+                    ⚠ Surat izin/undangan wajib dilampirkan (Maks 2 MB)
                   </span>
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Format: JPG, PNG, PDF. Maks 5MB</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Format: JPG, PNG, PDF. Maks 2 MB</span>
                 )}
               </div>
 

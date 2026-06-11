@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { usePolling } from '../../hooks/usePolling';
+import { useState, useEffect, useCallback } from 'react';
+import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetDashboardMahasiswa, apiGetTugasSaya, apiGetKegiatan } from '../../utils/api';
@@ -128,8 +128,11 @@ function DashboardMahasiswa() {
     fetchKegiatan();
   }, []);
 
-  usePolling(() => fetchDashboard(true), 20000);
-  usePolling(() => fetchKegiatan(), 15000);
+  // ── Realtime: refresh saat ada update absensi atau kegiatan ───────────────
+  const onAbsensiUpdate = useCallback(() => { fetchDashboard(true); fetchKegiatan(); }, []);
+  const onKegiatanUpdate = useCallback(() => fetchKegiatan(), []);
+  useSocket("absensi:update", onAbsensiUpdate);
+  useSocket("kegiatan:update", onKegiatanUpdate);
 
   const todayLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const izinAktif = data?.izin_aktif ?? null;

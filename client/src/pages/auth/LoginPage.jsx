@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { subscribePush } from '../../utils/pushSubscription';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -24,11 +25,21 @@ function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
+        if (data.data.isFirstLogin) {
+          localStorage.setItem('temp_token', data.token);
+          setAlert({ show: true, message: 'Harap ganti password default Anda.', type: 'success' });
+          setTimeout(() => navigate('/first-login'), 1000);
+          return;
+        }
+
         localStorage.setItem('simbima_token', data.token);
         localStorage.setItem('simbima_role', data.data.role);
         localStorage.setItem('simbima_nama', data.data.nama);
 
         setAlert({ show: true, message: `Selamat datang, ${data.data.nama}!`, type: 'success' });
+
+        // Minta izin Push Notification
+        subscribePush();
 
         setTimeout(() => {
           const role = data.data.role;

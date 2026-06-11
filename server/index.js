@@ -1,9 +1,11 @@
 // index.js
 process.env.TZ = 'Asia/Jakarta';
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
+const { Server } = require("socket.io");
 const path = require("path");
 
 dotenv.config();
@@ -11,6 +13,23 @@ dotenv.config();
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
+
+// ── Socket.io Setup ────────────────────────────────────────────────────────────
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+io.on("connection", (socket) => {
+  console.log(`🔌 Socket terhubung: ${socket.id}`);
+  socket.on("disconnect", () => {
+    console.log(`🔌 Socket terputus: ${socket.id}`);
+  });
+});
+
+// Export io agar bisa dipakai di controller
+module.exports = { io };
+
 const authRoutes = require("./routes/authRoutes");
 const kegiatanRoutes = require("./routes/kegiatanRoutes");
 const izinRoutes = require("./routes/izinRoutes");
@@ -20,12 +39,14 @@ const rekapRoutes = require("./routes/rekapRoutes");
 const notifikasiRoutes = require("./routes/notifikasiRoutes");
 const dashboardRoutes  = require("./routes/dashboardRoutes");
 const adminRoutes      = require("./routes/adminRoutes");
+const pushRoutes       = require("./routes/pushRoutes");
+const { initCronJobs } = require("./utils/cronJobs");
 
 // Middleware
 app.use(cors());
 app.use(express.json()); // Agar bisa baca data JSON dari frontend
 app.use("/api/auth", authRoutes);
-app.use("/api/kegiatan", kegiatanRoutes); 
+app.use("/api/kegiatan", kegiatanRoutes);
 app.use("/api/izin", izinRoutes);
 app.use("/api/monitoring", monitoringRoutes);
 app.use("/api/mahasiswa", mahasiswaRoutes);
@@ -33,6 +54,7 @@ app.use("/api/rekap", rekapRoutes);
 app.use("/api/notifikasi", notifikasiRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/push", pushRoutes);
 
 // Folder statis untuk penyimpanan file bukti
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
@@ -60,13 +82,17 @@ app.get("/api/test-db", async (req, res) => {
   }
 });
 
-// Jalankan Server
-const server = app.listen(PORT, () => {
+// Jalankan Server (httpServer, bukan app!)
+httpServer.listen(PORT, () => {
   console.log(`✅ Server SIMBIMA berjalan di http://localhost:${PORT}`);
+  console.log(`🔌 Socket.io aktif`);
+  
+  // Inisialisasi cron jobs (pengecekan otomatis)
+  initCronJobs();
 });
 
 // Handle port sudah dipakai
-server.on("error", (err) => {
+httpServer.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
     console.error(`❌ Port ${PORT} sudah dipakai proses lain!`);
     console.error(`   Jalankan perintah ini untuk membebaskan port:`);
@@ -81,7 +107,7 @@ server.on("error", (err) => {
 process.on("SIGINT", async () => {
   console.log("\n🛑 Server dimatikan (SIGINT)...");
   await prisma.$disconnect();
-  server.close(() => {
+  httpServer.close(() => {
     console.log("✅ Server berhasil dimatikan.");
     process.exit(0);
   });
@@ -91,7 +117,7 @@ process.on("SIGINT", async () => {
 process.on("SIGTERM", async () => {
   console.log("\n🔄 Nodemon restart — menutup server...");
   await prisma.$disconnect();
-  server.close(() => {
+  httpServer.close(() => {
     process.exit(0);
   });
 });
@@ -99,7 +125,7 @@ process.on("SIGTERM", async () => {
 // Graceful shutdown saat nodemon restart (SIGUSR2 — dipakai nodemon versi lama)
 process.once("SIGUSR2", async () => {
   await prisma.$disconnect();
-  server.close(() => {
+  httpServer.close(() => {
     process.kill(process.pid, "SIGUSR2");
   });
 });

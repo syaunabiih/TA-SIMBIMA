@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { apiGetQrToken } from '../utils/api';
+import { useSocket } from '../hooks/useSocket';
 
 const BASE_URL = 'http://localhost:5000/api';
 const getToken = () => localStorage.getItem('simbima_token');
@@ -100,9 +101,10 @@ export default function QrAbsensiModal({ idKegiatan, onClose, onExpired }) {
 
   useEffect(() => {
     fetchHadirFromExisting();
-    pollRef.current = setInterval(fetchHadirFromExisting, 5000);
-    return () => clearInterval(pollRef.current);
   }, [fetchHadirFromExisting]);
+
+  // ── Realtime: update list hadir saat ada absensi baru ─────────────────────
+  useSocket("absensi:update", fetchHadirFromExisting);
 
   // Escape key
   useEffect(() => {

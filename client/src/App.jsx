@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import LupaPasswordPage from './pages/auth/LupaPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import FirstLoginPasswordPage from './pages/auth/FirstLoginPasswordPage';
 import ProfilUser from './pages/profil/ProfilUser';
 
 // Mahasiswa
@@ -19,7 +20,6 @@ import NotifikasiMahasiswa from './pages/mahasiswa/NotifikasiMahasiswa';
 import DashboardFasilitator from './pages/fasilitator/DashboardFasilitator';
 import KelolaKegiatanFasilitator from './pages/fasilitator/KelolaKegiatanFasilitator';
 import ValidasiIzinFasilitator from './pages/fasilitator/ValidasiIzinFasilitator';
-import MonitoringKepulanganFasilitator from './pages/fasilitator/MonitoringKepulanganFasilitator';
 import RekapFasilitator from './pages/fasilitator/RekapFasilitator';
 import GenerateRekapFasilitator from './pages/fasilitator/GenerateRekapFasilitator';
 import DetailRekapFasilitator from './pages/fasilitator/DetailRekapFasilitator';
@@ -28,20 +28,15 @@ import TambahKegiatanPage from './pages/fasilitator/TambahKegiatanPage';
 import PilihPetugasPage from './pages/fasilitator/PilihPetugasPage';
 import DetailKegiatanPage from './pages/fasilitator/DetailKegiatanPage';
 import PerluPerhatianPage from './pages/fasilitator/PerluPerhatianPage';
-
-// Ketua Pokja (legacy)
-import DashboardKetuaPokja from './pages/ketuapokja/DashboardKetuaPokja';
-import MonitoringKetuaPokja from './pages/ketuapokja/MonitoringKetuaPokja';
-import EvaluasiKetuaPokja from './pages/ketuapokja/EvaluasiKetuaPokja';
-import RiwayatEvaluasiKetuaPokja from './pages/ketuapokja/RiwayatEvaluasiKetuaPokja';
+import DaftarMahasiswaPage from './pages/fasilitator/DaftarMahasiswaPage';
 
 // Superadmin
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard';
 import MasterDataPage from './pages/superadmin/MasterDataPage';
 import KelolaAkunPage from './pages/superadmin/KelolaAkunPage';
 import MonitoringPage from './pages/superadmin/MonitoringPage';
-import RekapPage from './pages/superadmin/RekapPage';
 import PerizinanReadOnlyPage from './pages/superadmin/PerizinanReadOnlyPage';
+import DaftarMahasiswaReadOnlyPage from './pages/superadmin/DaftarMahasiswaReadOnlyPage';
 
 // Import guard
 import PrivateRoute from './components/PrivateRoute';
@@ -54,6 +49,7 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/lupa-password" element={<LupaPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/first-login" element={<FirstLoginPasswordPage />} />
 
         {/* ── PROFIL GLOBAL SEMUA ROLE ── */}
         <Route path="/profil" element={<PrivateRoute allowedRoles={['MAHASISWA', 'FASILITATOR', 'KETUA_POKJA', 'SUPERADMIN']}><ProfilUser /></PrivateRoute>} />
@@ -100,11 +96,8 @@ function App() {
         <Route path="/fasilitator/perizinan" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><ValidasiIzinFasilitator /></PrivateRoute>
         } />
-        <Route path="/fasilitator/validasi-izin" element={
-          <PrivateRoute allowedRoles={['FASILITATOR']}><ValidasiIzinFasilitator /></PrivateRoute>
-        } />
         <Route path="/fasilitator/kepulangan" element={
-          <PrivateRoute allowedRoles={['FASILITATOR']}><MonitoringKepulanganFasilitator /></PrivateRoute>
+          <Navigate to="/fasilitator/perizinan?tab=kepulangan" replace />
         } />
         <Route path="/fasilitator/rekap" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><RekapFasilitator /></PrivateRoute>
@@ -124,19 +117,8 @@ function App() {
         <Route path="/fasilitator/perlu-perhatian" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><PerluPerhatianPage /></PrivateRoute>
         } />
-
-        {/* ── KETUA POKJA (legacy) ── */}
-        <Route path="/pokja/dashboard" element={
-          <PrivateRoute allowedRoles={['KETUA_POKJA']}><DashboardKetuaPokja /></PrivateRoute>
-        } />
-        <Route path="/pokja/monitoring" element={
-          <PrivateRoute allowedRoles={['KETUA_POKJA']}><MonitoringKetuaPokja /></PrivateRoute>
-        } />
-        <Route path="/pokja/evaluasi" element={
-          <PrivateRoute allowedRoles={['KETUA_POKJA']}><EvaluasiKetuaPokja /></PrivateRoute>
-        } />
-        <Route path="/pokja/evaluasi/riwayat" element={
-          <PrivateRoute allowedRoles={['KETUA_POKJA']}><RiwayatEvaluasiKetuaPokja /></PrivateRoute>
+        <Route path="/fasilitator/mahasiswa" element={
+          <PrivateRoute allowedRoles={['FASILITATOR']}><DaftarMahasiswaPage /></PrivateRoute>
         } />
 
         {/* ── SUPERADMIN ── */}
@@ -152,11 +134,11 @@ function App() {
         <Route path="/superadmin/monitoring" element={
           <PrivateRoute allowedRoles={['SUPERADMIN']}><MonitoringPage /></PrivateRoute>
         } />
-        <Route path="/superadmin/rekap" element={
-          <PrivateRoute allowedRoles={['SUPERADMIN']}><RekapPage /></PrivateRoute>
-        } />
         <Route path="/superadmin/perizinan" element={
           <PrivateRoute allowedRoles={['SUPERADMIN']}><PerizinanReadOnlyPage /></PrivateRoute>
+        } />
+        <Route path="/superadmin/mahasiswa" element={
+          <PrivateRoute allowedRoles={['SUPERADMIN']}><DaftarMahasiswaReadOnlyPage /></PrivateRoute>
         } />
 
         {/* Fallback */}

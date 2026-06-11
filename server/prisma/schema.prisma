@@ -7,7 +7,340 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ================= ENUMS (Pilihan Status) =================
+model Gedung {
+  id_gedung           Int                 @id @default(autoincrement())
+  nama_gedung         String              @unique
+  kode_gedung         String              @unique
+  jumlah_lantai       Int
+  kapasitas_mahasiswa Int
+  status_gedung       StatusGedung        @default(AKTIF)
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  evaluasis           EvaluasiPembinaan[]
+  fasilitators        Fasilitator[]
+  kegiatans           KegiatanPembinaan[]
+  mahasiswas          Mahasiswa[]
+  rekaps              RekapAbsensi[]
+
+  @@map("gedung")
+}
+
+model Mahasiswa {
+  id_mahasiswa       Int                    @id @default(autoincrement())
+  nim                String                 @unique
+  nama               String
+  email              String                 @unique
+  password           String
+  lantai             Int
+  nomor_kamar        String
+  alamat_asal        String?
+  no_telp            String?
+  foto_profil        String?
+  kuota_izin_pulang  Int                    @default(10)
+  status_reward      StatusRewardPunishment @default(AMAN)
+  status_hunian      StatusHunian           @default(AKTIF)
+  id_gedung          Int
+  created_at         DateTime               @default(now())
+  updated_at         DateTime               @updatedAt
+  id_fakultas        Int?
+  id_jurusan         Int?
+  id_tahun_akademik  Int?
+  is_first_login     Boolean                @default(true)
+  kehadirans         Kehadiran[]
+  fakultas           fakultas?              @relation(fields: [id_fakultas], references: [id_fakultas])
+  gedung             Gedung                 @relation(fields: [id_gedung], references: [id_gedung])
+  jurusan            jurusan?               @relation(fields: [id_jurusan], references: [id_jurusan])
+  tahun_akademik     TahunAkademik?         @relation(fields: [id_tahun_akademik], references: [id_tahun])
+  notifikasis        Notifikasi[]
+  push_subscriptions PushSubscription[]
+  perizinans         Perizinan[]
+  tugas_absen        PetugasAbsensi[]
+  rekaps             RekapAbsensi[]
+
+  @@index([id_fakultas], map: "mahasiswa_id_fakultas_fkey")
+  @@index([id_gedung], map: "mahasiswa_id_gedung_fkey")
+  @@index([id_jurusan], map: "mahasiswa_id_jurusan_fkey")
+  @@index([id_tahun_akademik], map: "mahasiswa_id_tahun_akademik_fkey")
+  @@map("mahasiswa")
+}
+
+model Fasilitator {
+  id_fasilitator    Int                 @id @default(autoincrement())
+  nip               String              @unique
+  nama              String
+  email             String              @unique
+  password          String
+  no_telp           String?
+  foto_profil       String?
+  id_gedung         Int
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+  evaluasi_terima   EvaluasiPembinaan[]
+  gedung            Gedung              @relation(fields: [id_gedung], references: [id_gedung])
+  kegiatan_kelola   KegiatanPembinaan[]
+  notifikasis       Notifikasi[]
+  izin_validasi     Perizinan[]
+  rekap_generate    RekapAbsensi[]
+  pushSubscriptions PushSubscription[]
+
+  @@index([id_gedung], map: "fasilitator_asrama_id_gedung_fkey")
+  @@map("fasilitator_asrama")
+}
+
+model KetuaPokja {
+  id_ketua_pokja    Int                 @id @default(autoincrement())
+  nip               String              @unique
+  nama              String
+  email             String              @unique
+  password          String
+  no_telp           String?
+  foto_profil       String?
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+  evaluasi_beri     EvaluasiPembinaan[]
+  notifikasis       Notifikasi[]
+  pushSubscriptions PushSubscription[]
+
+  @@map("ketua_pokja_asrama")
+}
+
+model KegiatanPembinaan {
+  id_kegiatan       Int              @id @default(autoincrement())
+  nama_kegiatan     String
+  deskripsi         String?          @db.Text
+  tanggal_kegiatan  DateTime         @db.Date
+  waktu_mulai       DateTime         @db.Time(0)
+  waktu_selesai     DateTime         @db.Time(0)
+  lokasi            String
+  status_kegiatan   StatusKegiatan   @default(BERLANGSUNG)
+  id_gedung         Int
+  id_fasilitator    Int
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+  qr_expires_at     DateTime?
+  qr_token          String?          @unique
+  id_jenis_kegiatan Int?
+  fasilitator       Fasilitator      @relation(fields: [id_fasilitator], references: [id_fasilitator])
+  gedung            Gedung           @relation(fields: [id_gedung], references: [id_gedung])
+  jenis_kegiatan    jenis_kegiatan?  @relation(fields: [id_jenis_kegiatan], references: [id_jenis_kegiatan])
+  kehadirans        Kehadiran[]
+  petugas           PetugasAbsensi[]
+
+  @@index([id_fasilitator], map: "kegiatan_pembinaan_id_fasilitator_fkey")
+  @@index([id_gedung], map: "kegiatan_pembinaan_id_gedung_fkey")
+  @@index([id_jenis_kegiatan], map: "kegiatan_pembinaan_id_jenis_kegiatan_fkey")
+  @@map("kegiatan_pembinaan")
+}
+
+model PetugasAbsensi {
+  id_petugas            Int               @id @default(autoincrement())
+  lantai_tanggung_jawab Int
+  tanggal_penugasan     DateTime          @default(now())
+  status_tugas          StatusTugas       @default(DITUGASKAN)
+  waktu_submit          DateTime?
+  id_kegiatan           Int
+  id_mahasiswa          Int
+  created_at            DateTime          @default(now())
+  input_kehadirans      Kehadiran[]
+  kegiatan              KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
+  mahasiswa             Mahasiswa         @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
+
+  @@index([id_kegiatan], map: "petugas_absensi_id_kegiatan_fkey")
+  @@index([id_mahasiswa], map: "petugas_absensi_id_mahasiswa_fkey")
+  @@map("petugas_absensi")
+}
+
+model Kehadiran {
+  id_kehadiran     Int               @id @default(autoincrement())
+  status_kehadiran StatusKehadiran
+  waktu_absen      DateTime          @default(now())
+  keterangan       String?           @db.Text
+  id_kegiatan      Int
+  id_mahasiswa     Int
+  id_petugas_input Int?
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  kegiatan         KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
+  mahasiswa        Mahasiswa         @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
+  petugas_input    PetugasAbsensi?   @relation(fields: [id_petugas_input], references: [id_petugas])
+
+  @@index([id_kegiatan], map: "kehadiran_id_kegiatan_fkey")
+  @@index([id_mahasiswa], map: "kehadiran_id_mahasiswa_fkey")
+  @@index([id_petugas_input], map: "kehadiran_id_petugas_input_fkey")
+  @@map("kehadiran")
+}
+
+model RekapAbsensi {
+  id_rekap                Int                    @id @default(autoincrement())
+  bulan                   Int
+  tahun                   Int
+  total_kegiatan          Int
+  total_hadir             Int
+  total_izin              Int
+  total_alpha             Int
+  persentase_kehadiran    Decimal                @db.Decimal(5, 2)
+  status_reward           StatusRewardPunishment
+  tanggal_generate        DateTime               @default(now())
+  tanggal_publikasi       DateTime?
+  status_publikasi        StatusPublikasi        @default(DRAFT)
+  id_gedung               Int
+  id_mahasiswa            Int
+  id_fasilitator_generate Int
+  created_at              DateTime               @default(now())
+  updated_at              DateTime               @updatedAt
+  batas_alfa              Int?
+  pengumuman_iqab         String?                @db.Text
+  status_iqab             String?
+  tanggal_mulai           DateTime?              @db.Date
+  tanggal_selesai         DateTime?              @db.Date
+  fasilitator             Fasilitator            @relation(fields: [id_fasilitator_generate], references: [id_fasilitator])
+  gedung                  Gedung                 @relation(fields: [id_gedung], references: [id_gedung])
+  mahasiswa               Mahasiswa              @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
+
+  @@index([id_fasilitator_generate], map: "rekap_absensi_id_fasilitator_generate_fkey")
+  @@index([id_gedung], map: "rekap_absensi_id_gedung_fkey")
+  @@index([id_mahasiswa], map: "rekap_absensi_id_mahasiswa_fkey")
+  @@map("rekap_absensi")
+}
+
+model Perizinan {
+  id_perizinan            Int                   @id @default(autoincrement())
+  jenis_izin              JenisIzin
+  tanggal_pengajuan       DateTime              @default(now())
+  tanggal_mulai           DateTime              @db.Date
+  tanggal_selesai         DateTime              @db.Date
+  durasi_hari             Int
+  alasan                  String                @db.Text
+  dokumen_pendukung       String?
+  status_pengajuan        StatusPengajuan       @default(MENUNGGU)
+  tanggal_validasi        DateTime?
+  catatan_fasilitator     String?               @db.Text
+  id_mahasiswa            Int
+  id_fasilitator_validasi Int?
+  created_at              DateTime              @default(now())
+  updated_at              DateTime              @updatedAt
+  foto_berangkat          String?
+  foto_pulang             String?
+  returned_at             DateTime?
+  konfirmasis             KonfirmasiPerizinan[]
+  fasilitator             Fasilitator?          @relation(fields: [id_fasilitator_validasi], references: [id_fasilitator])
+  mahasiswa               Mahasiswa             @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
+
+  @@index([id_fasilitator_validasi], map: "perizinan_id_fasilitator_validasi_fkey")
+  @@index([id_mahasiswa], map: "perizinan_id_mahasiswa_fkey")
+  @@map("perizinan")
+}
+
+model KonfirmasiPerizinan {
+  id_konfirmasi      Int             @id @default(autoincrement())
+  jenis_konfirmasi   JenisKonfirmasi
+  tanggal_konfirmasi DateTime        @default(now())
+  foto_bukti         String?
+  lokasi_konfirmasi  String?
+  keterangan         String?         @db.Text
+  id_perizinan       Int
+  created_at         DateTime        @default(now())
+  perizinan          Perizinan       @relation(fields: [id_perizinan], references: [id_perizinan])
+
+  @@index([id_perizinan], map: "konfirmasi_perizinan_id_perizinan_fkey")
+  @@map("konfirmasi_perizinan")
+}
+
+model EvaluasiPembinaan {
+  id_evaluasi      Int         @id @default(autoincrement())
+  tanggal_evaluasi DateTime    @default(now())
+  catatan_evaluasi String      @db.Text
+  tindak_lanjut    String?     @db.Text
+  bulan_periode    Int
+  tahun_periode    Int
+  id_ketua_pokja   Int
+  id_fasilitator   Int
+  id_gedung        Int
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  fasilitator      Fasilitator @relation(fields: [id_fasilitator], references: [id_fasilitator])
+  gedung           Gedung      @relation(fields: [id_gedung], references: [id_gedung])
+  ketua_pokja      KetuaPokja  @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja])
+
+  @@index([id_fasilitator], map: "evaluasi_pembinaan_id_fasilitator_fkey")
+  @@index([id_gedung], map: "evaluasi_pembinaan_id_gedung_fkey")
+  @@index([id_ketua_pokja], map: "evaluasi_pembinaan_id_ketua_pokja_fkey")
+  @@map("evaluasi_pembinaan")
+}
+
+model Notifikasi {
+  id_notifikasi   Int            @id @default(autoincrement())
+  judul           String
+  pesan           String         @db.Text
+  tanggal_kirim   DateTime       @default(now())
+  status_baca     Boolean        @default(false)
+  tipe_notifikasi TipeNotifikasi
+  id_referensi    Int?
+  dibaca_pada     DateTime?
+  id_mahasiswa    Int?
+  id_fasilitator  Int?
+  id_ketua_pokja  Int?
+  link_tujuan     String?
+  fasilitator     Fasilitator?   @relation(fields: [id_fasilitator], references: [id_fasilitator])
+  ketua_pokja     KetuaPokja?    @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja])
+  mahasiswa       Mahasiswa?     @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
+
+  @@index([id_fasilitator], map: "notifikasi_id_fasilitator_fkey")
+  @@index([id_ketua_pokja], map: "notifikasi_id_ketua_pokja_fkey")
+  @@index([id_mahasiswa], map: "notifikasi_id_mahasiswa_fkey")
+  @@map("notifikasi")
+}
+
+model TahunAkademik {
+  id_tahun   Int         @id @default(autoincrement())
+  nama       String      @unique
+  is_aktif   Boolean     @default(false)
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+  mahasiswa  Mahasiswa[]
+
+  @@map("tahun_akademik")
+}
+
+model ResetToken {
+  id_token   Int      @id @default(autoincrement())
+  email      String   @unique
+  token      String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@map("reset_token")
+}
+
+model fakultas {
+  id_fakultas Int         @id @default(autoincrement())
+  nama        String      @unique
+  created_at  DateTime    @default(now())
+  updated_at  DateTime
+  jurusan     jurusan[]
+  mahasiswa   Mahasiswa[]
+}
+
+model jenis_kegiatan {
+  id_jenis_kegiatan  Int                 @id @default(autoincrement())
+  nama_jenis         String              @unique
+  is_wajib           Boolean             @default(false)
+  created_at         DateTime            @default(now())
+  updated_at         DateTime
+  kegiatan_pembinaan KegiatanPembinaan[]
+}
+
+model jurusan {
+  id_jurusan  Int         @id @default(autoincrement())
+  nama        String
+  id_fakultas Int
+  created_at  DateTime    @default(now())
+  updated_at  DateTime
+  fakultas    fakultas    @relation(fields: [id_fakultas], references: [id_fakultas])
+  mahasiswa   Mahasiswa[]
+
+  @@index([id_fakultas], map: "jurusan_id_fakultas_fkey")
+}
 
 enum StatusGedung {
   AKTIF
@@ -28,15 +361,6 @@ enum StatusRewardPunishment {
   PERINGATAN_2
   DROP_OUT
   REWARD_TERBAIK
-}
-
-enum JenisKegiatan {
-  SHALAT_SUBUH
-  ABSENSI_MALAM
-  KEGIATAN_PEMBINAAN
-  KEGIATAN_KEBERSAMAAN
-  KEGIATAN_AMA
-  LAINNYA
 }
 
 enum StatusKegiatan {
@@ -73,7 +397,7 @@ enum StatusPengajuan {
   DISETUJUI
   DITOLAK
   DIBATALKAN
-  SELESAI // Sudah kembali
+  SELESAI
 }
 
 enum JenisKonfirmasi {
@@ -90,351 +414,17 @@ enum TipeNotifikasi {
   FOTO_PULANG
 }
 
-// ================= MODEL (TABEL) =================
-
-model Gedung {
-  id_gedung           Int       @id @default(autoincrement())
-  nama_gedung         String    @unique
-  kode_gedung         String    @unique
-  alamat              String    @db.Text
-  jumlah_lantai       Int
-  kapasitas_mahasiswa Int
-  status_gedung       StatusGedung @default(AKTIF)
-  
-  // Relasi
-  mahasiswas          Mahasiswa[]
-  fasilitators        Fasilitator[]
-  kegiatans           KegiatanPembinaan[]
-  rekaps              RekapAbsensi[]
-  evaluasis           EvaluasiPembinaan[]
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("gedung") // Nama tabel di database kecil semua
-}
-
-model Mahasiswa {
-  id_mahasiswa        Int       @id @default(autoincrement())
-  nim                 String    @unique
-  nama                String
-  email               String    @unique
-  password            String
-  lantai              Int
-  nomor_kamar         String
-  alamat_asal         String?
-  no_telp             String?
-  foto_profil         String?
-  kuota_izin_pulang   Int       @default(10) // Contoh default 10 hari
-  status_reward       StatusRewardPunishment @default(AMAN)
-  status_hunian       StatusHunian @default(AKTIF)
-
-  // Foreign Key ke Gedung
-  id_gedung           Int
-  gedung              Gedung    @relation(fields: [id_gedung], references: [id_gedung])
-
-  // Relasi
-  kehadirans          Kehadiran[]
-  perizinans          Perizinan[]
-  tugas_absen         PetugasAbsensi[]
-  notifikasis         Notifikasi[]
-  rekaps              RekapAbsensi[]
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("mahasiswa")
-}
-
-model Fasilitator {
-  id_fasilitator      Int       @id @default(autoincrement())
-  nip                 String    @unique
-  nama                String
-  email               String    @unique
-  password            String
-  no_telp             String?
-  foto_profil         String?
-
-  // Foreign Key ke Gedung
-  id_gedung           Int
-  gedung              Gedung    @relation(fields: [id_gedung], references: [id_gedung])
-
-  // Relasi
-  kegiatan_kelola     KegiatanPembinaan[]
-  izin_validasi       Perizinan[]
-  rekap_generate      RekapAbsensi[]
-  evaluasi_terima     EvaluasiPembinaan[]
-  notifikasis         Notifikasi[]
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("fasilitator_asrama")
-}
-
-model KetuaPokja {
-  id_ketua_pokja      Int       @id @default(autoincrement())
-  nip                 String    @unique
-  nama                String
-  email               String    @unique
-  password            String
-  no_telp             String?
-  foto_profil         String?
-
-  // Relasi
-  evaluasi_beri       EvaluasiPembinaan[]
-  notifikasis         Notifikasi[]
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("ketua_pokja_asrama")
-}
-
-model KegiatanPembinaan {
-  id_kegiatan         Int       @id @default(autoincrement())
-  nama_kegiatan       String
-  deskripsi           String?   @db.Text
-  tanggal_kegiatan    DateTime  @db.Date
-  waktu_mulai         DateTime  @db.Time
-  waktu_selesai       DateTime  @db.Time
-  lokasi              String
-  jenis_kegiatan      JenisKegiatan
-  status_kegiatan     StatusKegiatan @default(BERLANGSUNG)
-
-  // QR Code Absensi
-  qr_token            String?   @unique
-  qr_expires_at       DateTime?
-
-  // Foreign Keys
-  id_gedung           Int
-  gedung              Gedung    @relation(fields: [id_gedung], references: [id_gedung])
-  
-  id_fasilitator      Int
-  fasilitator         Fasilitator @relation(fields: [id_fasilitator], references: [id_fasilitator])
-
-  // Relasi
-  petugas             PetugasAbsensi[]
-  kehadirans          Kehadiran[]
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("kegiatan_pembinaan")
-}
-
-model PetugasAbsensi {
-  id_petugas          Int       @id @default(autoincrement())
-  lantai_tanggung_jawab Int
-  tanggal_penugasan   DateTime  @default(now())
-  status_tugas        StatusTugas @default(DITUGASKAN)
-  waktu_submit        DateTime?
-
-  // Foreign Keys
-  id_kegiatan         Int
-  kegiatan            KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
-
-  id_mahasiswa        Int
-  mahasiswa           Mahasiswa @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-
-  // Relasi (Petugas ini menginput kehadiran siapa saja?)
-  input_kehadirans    Kehadiran[]
-
-  created_at          DateTime  @default(now())
-
-  @@map("petugas_absensi")
-}
-
-model Kehadiran {
-  id_kehadiran        Int       @id @default(autoincrement())
-  status_kehadiran    StatusKehadiran
-  waktu_absen         DateTime  @default(now())
-  keterangan          String?   @db.Text
-
-  // Foreign Keys
-  id_kegiatan         Int
-  kegiatan            KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
-
-  id_mahasiswa        Int
-  mahasiswa           Mahasiswa @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-
-  // Siapa yang input? (Bisa Petugas Mahasiswa atau Fasilitator)
-  id_petugas_input    Int?
-  petugas_input       PetugasAbsensi? @relation(fields: [id_petugas_input], references: [id_petugas])
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("kehadiran")
-}
-
-model RekapAbsensi {
-  id_rekap            Int       @id @default(autoincrement())
-  bulan               Int
-  tahun               Int
-  // Periode berdasarkan rentang tanggal (update baru)
-  tanggal_mulai       DateTime? @db.Date
-  tanggal_selesai     DateTime? @db.Date
-  // Konfigurasi iqab
-  batas_alfa          Int?      // Batas minimum alfa untuk dapat iqab
-  pengumuman_iqab     String?   @db.Text
-  total_kegiatan      Int
-  total_hadir         Int
-  total_izin          Int
-  total_alpha         Int
-  persentase_kehadiran Decimal  @db.Decimal(5, 2)
-  status_reward       StatusRewardPunishment
-  status_iqab         String?   // DAPAT_IQAB | BEBAS_IQAB
-
-  tanggal_generate    DateTime  @default(now())
-  tanggal_publikasi   DateTime?
-  status_publikasi    StatusPublikasi @default(DRAFT)
-
-  // Foreign Keys
-  id_gedung           Int
-  gedung              Gedung    @relation(fields: [id_gedung], references: [id_gedung])
-
-  id_mahasiswa        Int
-  mahasiswa           Mahasiswa @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-
-  id_fasilitator_generate Int
-  fasilitator         Fasilitator @relation(fields: [id_fasilitator_generate], references: [id_fasilitator])
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("rekap_absensi")
-}
-
-model Perizinan {
-  id_perizinan        Int       @id @default(autoincrement())
-  jenis_izin          JenisIzin
-  tanggal_pengajuan   DateTime  @default(now())
-  tanggal_mulai       DateTime  @db.Date
-  tanggal_selesai     DateTime  @db.Date
-  durasi_hari         Int
-  alasan              String    @db.Text
-  dokumen_pendukung   String?   // URL File
-  foto_berangkat      String?   // URL foto bukti berangkat
-  foto_pulang         String?   // URL foto bukti pulang
-  status_pengajuan    StatusPengajuan @default(MENUNGGU)
-  
-  tanggal_validasi    DateTime?
-  catatan_fasilitator String?   @db.Text
-
-  // Foreign Keys
-  id_mahasiswa        Int
-  mahasiswa           Mahasiswa @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-
-  id_fasilitator_validasi Int?
-  fasilitator         Fasilitator? @relation(fields: [id_fasilitator_validasi], references: [id_fasilitator])
-
-  // Relasi
-  konfirmasis         KonfirmasiPerizinan[]
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("perizinan")
-}
-
-model KonfirmasiPerizinan {
-  id_konfirmasi       Int       @id @default(autoincrement())
-  jenis_konfirmasi    JenisKonfirmasi
-  tanggal_konfirmasi  DateTime  @default(now())
-  foto_bukti          String?   // URL Foto
-  lokasi_konfirmasi   String?
-  keterangan          String?   @db.Text
-
-  // Foreign Keys
-  id_perizinan        Int
-  perizinan           Perizinan @relation(fields: [id_perizinan], references: [id_perizinan])
-
-  created_at          DateTime  @default(now())
-
-  @@map("konfirmasi_perizinan")
-}
-
-model EvaluasiPembinaan {
-  id_evaluasi         Int       @id @default(autoincrement())
-  tanggal_evaluasi    DateTime  @default(now())
-  catatan_evaluasi    String    @db.Text
-  tindak_lanjut       String?   @db.Text
-  bulan_periode       Int
-  tahun_periode       Int
-
-  // Foreign Keys
-  id_ketua_pokja      Int
-  ketua_pokja         KetuaPokja @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja])
-
-  id_fasilitator      Int
-  fasilitator         Fasilitator @relation(fields: [id_fasilitator], references: [id_fasilitator])
-
-  id_gedung           Int
-  gedung              Gedung    @relation(fields: [id_gedung], references: [id_gedung])
-
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-
-  @@map("evaluasi_pembinaan")
-}
-
-model Notifikasi {
-  id_notifikasi       Int       @id @default(autoincrement())
-  judul               String
-  pesan               String    @db.Text
-  tanggal_kirim       DateTime  @default(now())
-  status_baca         Boolean   @default(false)
-  tipe_notifikasi     TipeNotifikasi
-  id_referensi        Int?      // ID Absensi, ID Izin, dll (Opsional)
-  link_tujuan         String?   // URL halaman tujuan navigasi
-  dibaca_pada         DateTime?
-
-  // Relasi Polimorfik (Optional Chaining)
-  // Penerima bisa salah satu dari 3 aktor
-  id_mahasiswa        Int?
-  mahasiswa           Mahasiswa? @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-
-  id_fasilitator      Int?
-  fasilitator         Fasilitator? @relation(fields: [id_fasilitator], references: [id_fasilitator])
-
-  id_ketua_pokja      Int?
-  ketua_pokja         KetuaPokja? @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja])
-
-  @@map("notifikasi")
-}
-
-model TahunAkademik {
-  id_tahun    Int      @id @default(autoincrement())
-  nama        String   // contoh: "2024/2025"
-  semester    String   // "Ganjil" | "Genap"
-  is_aktif    Boolean  @default(false)
-
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-
-  @@map("tahun_akademik")
-}
-
-model JenisKegiatanMaster {
-  id          Int      @id @default(autoincrement())
-  nama        String
-  kode        String   @unique  // Cocok dgn enum: SHALAT_SUBUH, ABSENSI_MALAM, dll
-  deskripsi   String?  @db.Text
-  is_aktif    Boolean  @default(true)
-
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-
-  @@map("jenis_kegiatan_master")
-}
-
-model ResetToken {
-  id_token   Int      @id @default(autoincrement())
-  email      String   @unique
-  token      String   @unique
-  expires_at DateTime
-  created_at DateTime @default(now())
-
-  @@map("reset_token")
+model PushSubscription {
+  id             Int      @id @default(autoincrement())
+  endpoint       String   @db.Text
+  keys_p256dh    String   @db.Text
+  keys_auth      String   @db.Text
+  id_mahasiswa   Int?
+  id_fasilitator Int?
+  id_ketua_pokja Int?
+  created_at     DateTime @default(now())
+
+  mahasiswa   Mahasiswa?   @relation(fields: [id_mahasiswa], references: [id_mahasiswa], onDelete: Cascade)
+  fasilitator Fasilitator? @relation(fields: [id_fasilitator], references: [id_fasilitator], onDelete: Cascade)
+  ketua_pokja KetuaPokja?  @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja], onDelete: Cascade)
 }

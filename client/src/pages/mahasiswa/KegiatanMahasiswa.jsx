@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { usePolling } from '../../hooks/usePolling';
+import { useState, useEffect, useCallback } from 'react';
+import { useSocket } from '../../hooks/useSocket';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetKegiatan } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
@@ -83,7 +83,11 @@ function KegiatanMahasiswa() {
   };
 
   useEffect(() => { fetchKegiatan(false); }, []);
-  usePolling(() => fetchKegiatan(true), 10000);
+
+  // ── Realtime: refresh saat ada update kegiatan / absensi ────────────────────
+  const onUpdate = useCallback(() => fetchKegiatan(true), []);
+  useSocket("kegiatan:update", onUpdate);
+  useSocket("absensi:update",  onUpdate);
 
   const FILTERS  = ['SEMUA', 'BERLANGSUNG', 'SELESAI'];
   const filtered = filter === 'SEMUA' ? kegiatan : kegiatan.filter(k => k.status_kegiatan === filter);
@@ -192,7 +196,7 @@ function KegiatanMahasiswa() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {['#', 'Nama Kegiatan', 'Tanggal', 'Waktu', 'Jenis', 'Lokasi', 'Status'].map(h => (
+                    {['#', 'Nama Kegiatan', 'Tanggal', 'Waktu', 'Lokasi', 'Status'].map(h => (
                       <th key={h} style={{
                         padding: '12px 14px', textAlign: 'left', color: '#64748b',
                         fontWeight: '500', fontSize: '11px', textTransform: 'uppercase',
@@ -212,9 +216,6 @@ function KegiatanMahasiswa() {
                       </td>
                       <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>
                         {new Date(k.waktu_mulai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>
-                        {k.jenis_kegiatan?.replace(/_/g, ' ')}
                       </td>
                       <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>{k.lokasi}</td>
                       <td style={{ padding: '12px 14px' }}>

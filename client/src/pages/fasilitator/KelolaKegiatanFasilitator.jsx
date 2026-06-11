@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
+import { FASILITATOR_MENU } from './fasilitatorMenu';
 import { apiGetKegiatan } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
+
+const API = 'http://localhost:5000';
+const token = () => localStorage.getItem('simbima_token');
 
 // ─── Ikon sidebar ──────────────────────────────────────────────
 const IconHome     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
@@ -11,13 +15,7 @@ const IconFile     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill=
 const IconPin      = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>;
 const IconList     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2"/></svg>;
 
-const MENU = [
-  { path: '/fasilitator/dashboard',  label: 'Dashboard',       icon: <IconHome /> },
-  { path: '/fasilitator/kegiatan',   label: 'Kelola Kegiatan', icon: <IconCal /> },
-  { path: '/fasilitator/perizinan',  label: 'Validasi Izin',   icon: <IconFile /> },
-  { path: '/fasilitator/kepulangan', label: 'Kepulangan',      icon: <IconPin /> },
-  { path: '/fasilitator/rekap',      label: 'Rekap Absensi',   icon: <IconList /> },
-];
+
 
 // ─── Badge status ──────────────────────────────────────────────
 function BadgeStatus({ status }) {
@@ -40,10 +38,12 @@ function BadgeStatus({ status }) {
 // ─── Komponen Utama ────────────────────────────────────────────
 function KelolaKegiatanFasilitator() {
   const navigate = useNavigate();
-  const [kegiatan, setKegiatan] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [alert, setAlert]       = useState(null);
-  const [filter, setFilter]     = useState('SEMUA');
+  const [kegiatan, setKegiatan]           = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [alert, setAlert]                 = useState(null);
+  const [filter, setFilter]               = useState('SEMUA');
+  const [filterJenis, setFilterJenis]     = useState('');
+  const [jenisList, setJenisList]         = useState([]);
 
   useEffect(() => {
     // Tampilkan pesan sukses dari PilihPetugasPage jika ada
@@ -54,7 +54,17 @@ function KelolaKegiatanFasilitator() {
       setTimeout(() => setAlert(null), 4000);
     }
     fetchKegiatan();
+    fetchJenisKegiatan();
   }, []);
+
+  const fetchJenisKegiatan = () => {
+    fetch(`${API}/api/admin/jenis-kegiatan`, { headers: { Authorization: `Bearer ${token()}` } })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'Sukses') setJenisList(data.data);
+      })
+      .catch(console.error);
+  };
 
   const fetchKegiatan = () => {
     setLoading(true);
@@ -64,7 +74,9 @@ function KelolaKegiatanFasilitator() {
   };
 
   const FILTERS  = ['SEMUA', 'BERLANGSUNG', 'SELESAI'];
-  const filtered = filter === 'SEMUA' ? kegiatan : kegiatan.filter(k => k.status_kegiatan === filter);
+  const filtered = kegiatan
+    .filter(k => filter === 'SEMUA' || k.status_kegiatan === filter)
+    .filter(k => !filterJenis || k.id_jenis_kegiatan === filterJenis);
 
   const total        = kegiatan.length;
   const berlangsung  = kegiatan.filter(k => k.status_kegiatan === 'BERLANGSUNG').length;
@@ -74,7 +86,7 @@ function KelolaKegiatanFasilitator() {
   const animSelesai      = useCountUp(selesai);
 
   return (
-    <DashboardLayout menuItems={MENU}>
+    <DashboardLayout menuItems={FASILITATOR_MENU}>
       <div className="page-enter page-content">
 
         {/* Header */}
@@ -119,8 +131,8 @@ function KelolaKegiatanFasilitator() {
           ))}
         </div>
 
-        {/* Filter Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {/* Filter Tabs Status */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
           {FILTERS.map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '6px 14px', borderRadius: '20px', border: '1px solid',
@@ -131,6 +143,30 @@ function KelolaKegiatanFasilitator() {
               borderColor:  filter === f ? '#10b981' : '#e2e8f0',
             }}>
               {f === 'SEMUA' ? 'Semua' : f === 'BERLANGSUNG' ? 'Sedang Berlangsung' : 'Selesai'}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter Jenis */}
+        <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Jenis:</span>
+          <button onClick={() => setFilterJenis('')} style={{
+            padding: '5px 12px', borderRadius: '16px', border: '1px solid',
+            fontSize: '11px', fontWeight: '500', cursor: 'pointer',
+            background: filterJenis === '' ? '#10b981' : '#fff',
+            color:      filterJenis === '' ? '#fff' : '#64748b',
+            borderColor:filterJenis === '' ? '#10b981' : '#e2e8f0',
+          }}>Semua</button>
+          
+          {jenisList.map(j => (
+            <button key={j.id_jenis_kegiatan} onClick={() => setFilterJenis(j.id_jenis_kegiatan)} style={{
+              padding: '5px 12px', borderRadius: '16px', border: '1px solid',
+              fontSize: '11px', fontWeight: '600', cursor: 'pointer',
+              background: filterJenis === j.id_jenis_kegiatan ? (j.is_wajib ? '#dc2626' : '#2563eb') : '#fff',
+              color:      filterJenis === j.id_jenis_kegiatan ? '#fff' : '#64748b',
+              borderColor:filterJenis === j.id_jenis_kegiatan ? (j.is_wajib ? '#dc2626' : '#2563eb') : '#e2e8f0',
+            }}>
+              {j.is_wajib ? '🔴' : '🔵'} {j.nama_jenis}
             </button>
           ))}
         </div>
@@ -163,7 +199,7 @@ function KelolaKegiatanFasilitator() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {['#', 'Nama Kegiatan', 'Tanggal', 'Waktu', 'Jenis', 'Lokasi', 'Status', 'Aksi'].map(h => (
+                    {['#', 'Jenis', 'Nama Kegiatan', 'Tanggal', 'Waktu', 'Lokasi', 'Status', 'Aksi'].map(h => (
                       <th key={h} style={{
                         padding: '12px 14px', textAlign: 'left', color: '#64748b',
                         fontWeight: '500', fontSize: '11px', textTransform: 'uppercase',
@@ -177,15 +213,26 @@ function KelolaKegiatanFasilitator() {
                     <tr key={k.id_kegiatan} className="table-row row-animate"
                       style={{ animationDelay: `${0.04 * i}s` }}>
                       <td style={{ padding: '12px 14px', color: '#94a3b8', fontSize: '13px' }}>{i + 1}</td>
+                      <td style={{ padding: '12px 14px' }}>
+                        {k.jenis_kegiatan?.is_wajib ? (
+                          <span style={{ fontSize: '11px', color: '#dc2626', background: '#fef2f2', padding: '2px 8px', borderRadius: '12px' }}>
+                            🔴 Wajib
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px' }}>
+                            🔵 Mandiri
+                          </span>
+                        )}
+                        <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '600', color: '#374151' }}>
+                          {k.jenis_kegiatan?.nama_jenis || 'Lainnya'}
+                        </div>
+                      </td>
                       <td style={{ padding: '12px 14px', color: '#1e293b', fontWeight: '500' }}>{k.nama_kegiatan}</td>
                       <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>
                         {new Date(k.tanggal_kegiatan).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>
                         {new Date(k.waktu_mulai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>
-                        {k.jenis_kegiatan?.replace(/_/g, ' ')}
                       </td>
                       <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '13px' }}>{k.lokasi}</td>
                       <td style={{ padding: '12px 14px' }}>
@@ -220,3 +267,4 @@ function KelolaKegiatanFasilitator() {
 }
 
 export default KelolaKegiatanFasilitator;
+

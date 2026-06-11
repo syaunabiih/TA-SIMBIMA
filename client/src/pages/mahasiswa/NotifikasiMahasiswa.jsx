@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { usePolling } from '../../hooks/usePolling';
+import { useState, useEffect, useCallback } from 'react';
+import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetNotifikasi, apiTandaiDibaca, apiTandaiSemuaDibaca } from '../../utils/api';
@@ -115,7 +115,7 @@ function getLabelTombol(tipe) {
   if (tipe === 'IZIN') return '📋 Lihat Detail Izin';
   if (tipe === 'FOTO_BERANGKAT' || tipe === 'FOTO_PULANG') return '🏠 Lihat Detail Izin';
   if (tipe === 'KEGIATAN' || tipe === 'ABSENSI') return '📅 Lihat Kegiatan';
-  return '🔗 Buka Halaman';
+  return ' Buka Halaman';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -298,7 +298,10 @@ function NotifikasiMahasiswa() {
   };
 
   useEffect(() => { fetchNotif(false); }, []);
-  usePolling(() => fetchNotif(true), 10000);
+
+  // ── Realtime: refresh saat ada update perizinan ────────────────────────────
+  const onPerizinanUpdate = useCallback(() => fetchNotif(true), []);
+  useSocket("perizinan:update", onPerizinanUpdate);
 
   const handleTandaiSemua = async () => {
     try { await apiTandaiSemuaDibaca(); fetchNotif(); } catch (e) {}

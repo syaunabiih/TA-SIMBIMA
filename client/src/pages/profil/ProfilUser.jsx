@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
+import SuperadminLayout from '../../components/layout/SuperadminLayout';
 import { apiGetProfil, apiUpdateProfil, apiChangePassword } from '../../utils/api';
 
 const IconHome = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
@@ -102,11 +103,10 @@ function ProfilUser() {
      return <DashboardLayout menuItems={menuItems}><div style={{ padding: '40px', textAlign: 'center' }}>Memuat data profil...</div></DashboardLayout>;
   }
 
-  const roleText = role === 'MAHASISWA' ? 'Mahasiswa Penghuni' : role === 'FASILITATOR' ? 'Fasilitator Asrama' : 'Lembaga / Ketua Pokja';
+  const roleText = (role === 'SUPERADMIN' || role === 'KETUA_POKJA') ? 'Lembaga / Ketua Pokja' : role === 'FASILITATOR' ? 'Fasilitator Asrama' : 'Mahasiswa Penghuni';
   const getIdentifier = () => profilData.nim || profilData.nip || '-';
 
-  return (
-    <DashboardLayout menuItems={menuItems}>
+  const content = (
       <div className="page-enter" style={{ padding: '32px', maxWidth: '700px', margin: '0 auto' }}>
         
         <h1 style={{ margin: '0 0 24px', fontSize: '24px', fontWeight: '700', color: '#1e293b' }}>Pengaturan Profil</h1>
@@ -186,8 +186,12 @@ function ProfilUser() {
         </div>
 
       </div>
-    </DashboardLayout>
   );
+
+  if (role === 'SUPERADMIN' || role === 'KETUA_POKJA') {
+    return <SuperadminLayout>{content}</SuperadminLayout>;
+  }
+  return <DashboardLayout menuItems={menuItems}>{content}</DashboardLayout>;
 }
 
 export default ProfilUser;

@@ -1,22 +1,16 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
+import { FASILITATOR_MENU } from './fasilitatorMenu';
 import { apiGetKegiatan, apiTutupPresensi, apiInputKehadiranFasil, apiEditKehadiranFasil, apiCekKelengkapanAbsensi, apiAlfaOtomatis } from '../../utils/api';
 import { createPortal } from 'react-dom';
 import QrAbsensiModal from '../../components/QrAbsensiModal';
 
-const MENU = [
-  { path: '/fasilitator/dashboard',  label: 'Dashboard',       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg> },
-  { path: '/fasilitator/kegiatan',   label: 'Kelola Kegiatan', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/></svg> },
-  { path: '/fasilitator/perizinan',  label: 'Validasi Izin',   icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/></svg> },
-  { path: '/fasilitator/kepulangan', label: 'Kepulangan',      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg> },
-  { path: '/fasilitator/rekap',      label: 'Rekap Absensi',   icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2"/></svg> },
-];
+
 
 const SLOT_OPTIONS = [
   '1-A', '1-B', '2-A', '2-B', '3-A', '3-B', '4-A', '4-B', '5-A', '5-B'
 ];
-
 function labelSlot(key) {
   const [lantai, blok] = key.split('-');
   return `Lantai ${lantai} — Blok ${blok}`;
@@ -395,7 +389,7 @@ function DetailKegiatanPage() {
 
   if (loading) {
     return (
-      <DashboardLayout menuItems={MENU}>
+      <DashboardLayout menuItems={FASILITATOR_MENU}>
         <div className="page-content">
           {[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer" style={{ height: '56px', borderRadius: '12px', marginBottom: '12px' }} />)}
         </div>
@@ -405,7 +399,7 @@ function DetailKegiatanPage() {
 
   if (!kegiatan) {
     return (
-      <DashboardLayout menuItems={MENU}>
+      <DashboardLayout menuItems={FASILITATOR_MENU}>
         <div className="page-content" style={{ textAlign: 'center', color: '#94a3b8' }}>
           <div style={{ fontSize: '40px', marginBottom: '12px' }}>😕</div>
           <div style={{ fontSize: '16px', fontWeight: '600' }}>Kegiatan tidak ditemukan</div>
@@ -421,7 +415,7 @@ function DetailKegiatanPage() {
   const cardHeader = { padding: '16px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 
   return (
-    <DashboardLayout menuItems={MENU}>
+    <DashboardLayout menuItems={FASILITATOR_MENU}>
       {/* Modal Sukses Simpan Kehadiran */}
       {successModal && createPortal((
         <div
@@ -689,7 +683,6 @@ function DetailKegiatanPage() {
               { label: 'Tanggal',     val: fmtTgl(kegiatan.tanggal_kegiatan) },
               { label: 'Waktu Mulai', val: fmtJam(kegiatan.waktu_mulai) },
               { label: 'Lokasi',      val: kegiatan.lokasi },
-              { label: 'Jenis',       val: kegiatan.jenis_kegiatan?.replace(/_/g, ' ') },
             ].map(({ label, val }) => (
               <div key={label}>
                 <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>{label}</div>
@@ -976,3 +969,4 @@ function DetailKegiatanPage() {
 }
 
 export default DetailKegiatanPage;
+

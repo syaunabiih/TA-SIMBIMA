@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { usePolling } from '../../hooks/usePolling';
+import { useSocket } from '../../hooks/useSocket';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { apiGetIzinDetail, apiUploadFotoBerangkat, apiUploadFotoPulang, apiBatalkanIzin } from '../../utils/api';
 import Modal from '../../components/Modal';
@@ -135,7 +135,7 @@ function FotoUploadCard({ title, emoji, existingUrl, onUpload, uploading, disabl
     if (!f) return;
     const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
     if (!validTypes.includes(f.type)) { setFileError('Format harus JPG / PNG / WebP.'); return; }
-    if (f.size > 5 * 1024 * 1024) { setFileError('Ukuran maksimal 5 MB.'); return; }
+    if (f.size > 2 * 1024 * 1024) { setFileError('Ukuran maksimal 2 MB.'); return; }
     setLocalFile(f);
     setLocalPreview(URL.createObjectURL(f));
   };
@@ -243,7 +243,7 @@ function FotoUploadCard({ title, emoji, existingUrl, onUpload, uploading, disabl
                   style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', fontSize: '12px', fontWeight: '600', cursor: disabled ? 'not-allowed' : 'pointer' }}
                 > Ambil Foto</button>
               </div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px' }}>JPG, PNG, WebP — maks. 5 MB</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px' }}>JPG, PNG, WebP — maks. 2 MB</div>
             </div>
           )}
         </div>
@@ -305,7 +305,10 @@ function IzinDetailPage() {
   };
 
   useEffect(() => { fetchDetail(false); }, [id]);
-  usePolling(() => fetchDetail(true), 10000);
+
+  // ── Realtime: refresh saat ada update perizinan ────────────────────────────
+  const onPerizinanUpdate = useCallback(() => fetchDetail(true), [id]);
+  useSocket("perizinan:update", onPerizinanUpdate);
 
   const showAlert = (type, msg) => {
     setAlert({ type, msg });

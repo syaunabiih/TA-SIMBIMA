@@ -1,22 +1,15 @@
-import { useState, useEffect } from 'react';
-import { usePolling } from '../../hooks/usePolling';
+﻿import { useState, useEffect, useCallback } from 'react';
+import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
+import { FASILITATOR_MENU } from './fasilitatorMenu';
 import { apiGetNotifikasi, apiTandaiDibaca, apiTandaiSemuaDibaca } from '../../utils/api';
 
 // ─── Ikon SVG Sidebar ─────────────────────────────────────────────────────────
 const IconHome     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
-const IconCalendar = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/></svg>;
 const IconFile     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/></svg>;
 const IconMapPin   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>;
-const IconFileText = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2"/></svg>;
 
-const MENU = [
-  { path: '/fasilitator/dashboard',  label: 'Dashboard',       icon: <IconHome /> },
-  { path: '/fasilitator/kegiatan',   label: 'Kelola Kegiatan', icon: <IconCalendar /> },
-  { path: '/fasilitator/perizinan',  label: 'Validasi Izin',   icon: <IconFile /> },
-  { path: '/fasilitator/rekap',      label: 'Rekap Absensi',   icon: <IconFileText /> },
-];
 
 // ─── Konfigurasi Tipe Notifikasi ──────────────────────────────────────────────
 // Memetakan TipeNotifikasi enum dari DB ke tampilan UI
@@ -309,7 +302,10 @@ function NotifikasiFasilitator() {
   };
 
   useEffect(() => { fetchNotif(false); }, []);
-  usePolling(() => fetchNotif(true), 10000);
+
+  // ── Realtime: refresh saat ada update perizinan ────────────────────────────
+  const onPerizinanUpdate = useCallback(() => fetchNotif(true), []);
+  useSocket("perizinan:update", onPerizinanUpdate);
 
   const handleTandaiSemua = async () => {
     try { await apiTandaiSemuaDibaca(); fetchNotif(); } catch (e) {}
@@ -335,7 +331,7 @@ function NotifikasiFasilitator() {
   const unreadCount  = notifList.filter(n => !n.status_baca).length;
 
   return (
-    <DashboardLayout menuItems={MENU}>
+    <DashboardLayout menuItems={FASILITATOR_MENU}>
       <div className="page-enter page-content" style={{ maxWidth: '760px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -447,3 +443,4 @@ function NotifikasiFasilitator() {
 }
 
 export default NotifikasiFasilitator;
+

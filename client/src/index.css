@@ -567,7 +567,6 @@ body {
 
 .main-content {
   flex: 1;
-  margin-left: 260px;
   min-height: 100vh;
   background: #f0f4f8;
   display: flex;
@@ -575,27 +574,28 @@ body {
   transition: margin-left 0.3s ease;
 }
 
+.main-content.sidebar-open {
+  margin-left: 260px;
+}
+
+.main-content.sidebar-closed {
+  margin-left: 0;
+}
+
 /* Backdrop hidden on desktop */
 .sidebar-backdrop {
   display: none;
 }
 
-/* Hamburger hidden on desktop */
+/* Hamburger untuk Desktop & Mobile */
+.hamburger-btn-desktop:hover {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+/* Hide original hamburger-btn since we use hamburger-btn-desktop */
 .hamburger-btn {
   display: none;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #64748b;
-  padding: 4px;
-  border-radius: 8px;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s ease;
-}
-.hamburger-btn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
 }
 
 /* Toggle button for desktop sidebar collapse */
@@ -702,7 +702,7 @@ body {
   }
 
   /* Main content takes full width */
-  .main-content {
+  .main-content.sidebar-open, .main-content.sidebar-closed, .main-content {
     margin-left: 0 !important;
   }
 
@@ -738,6 +738,7 @@ body {
    BREAKPOINT: sm (≤ 640px) — Small Mobile
    ═══════════════════════════════════════════════════ */
 
+
 @media (max-width: 640px) {
   /* All grids → 1 column */
   .grid-responsive-5,
@@ -769,4 +770,38 @@ body {
     border-radius: 0 !important;
     margin: 0 !important;
   }
+
+  /* ── Pokja page extras ── */
+
+  /* Form card full width on mobile */
+  .stat-card[style*="maxWidth"] {
+    max-width: 100% !important;
+  }
+
+  /* Heading size smaller on mobile */
+  h1 {
+    font-size: 20px !important;
+  }
+
+  /* Table responsive: ensure horizontal scroll */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-responsive table {
+    min-width: 500px;
+  }
+
+  /* CTA button full width on mobile */
+  .btn-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Filter buttons: wrap & smaller on mobile */
+  .filter-wrap {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
 }
+
