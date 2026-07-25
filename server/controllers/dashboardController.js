@@ -614,7 +614,7 @@ const getDashboardMahasiswa = async (req, res) => {
     // 7. REKAP TERBARU (1 rekap paling baru yang sudah PUBLISHED)
     const rekapTerbaruRaw = await prisma.rekapAbsensi.findFirst({
       where: { id_mahasiswa, status_publikasi: 'PUBLISHED' },
-      orderBy: [{ tanggal_mulai: 'desc' }],
+      orderBy: [{ created_at: 'desc' }],
       select: {
         id_rekap:             true,
         tanggal_mulai:        true,

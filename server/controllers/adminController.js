@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+const { isEmailInUseGlobally, isValidEmailFormat } = require("../utils/validators");
 
 const prisma = new PrismaClient();
 
@@ -60,12 +61,23 @@ const tambahFasilitator = async (req, res) => {
   }
 
   try {
-    // Cek duplikat
+    // Cek duplikat NIP
     const exist = await prisma.fasilitator.findFirst({
-      where: { OR: [{ nip }, { email }] },
+      where: { nip },
     });
     if (exist) {
-      return res.status(409).json({ message: "NIP atau Email sudah terdaftar." });
+      return res.status(409).json({ message: "NIP sudah terdaftar." });
+    }
+
+    // Cek format Email
+    if (!isValidEmailFormat(email)) {
+      return res.status(400).json({ message: "Format email tidak valid (contoh: nama@email.com)." });
+    }
+
+    // Cek duplikat Email secara global
+    const emailTaken = await isEmailInUseGlobally(email);
+    if (emailTaken) {
+      return res.status(409).json({ message: "Email ini sudah terdaftar di sistem. Silakan gunakan email lain." });
     }
 
     // Cek gedung ada
@@ -124,7 +136,16 @@ const editFasilitator = async (req, res) => {
 
     const updateData = {};
     if (nama) updateData.nama = nama;
-    if (email) updateData.email = email;
+    if (email) {
+      if (!isValidEmailFormat(email)) {
+        return res.status(400).json({ message: "Format email tidak valid (contoh: nama@email.com)." });
+      }
+      const emailTaken = await isEmailInUseGlobally(email, "FASILITATOR", id);
+      if (emailTaken) {
+        return res.status(409).json({ message: "Email ini sudah terdaftar di sistem. Silakan gunakan email lain." });
+      }
+      updateData.email = email;
+    }
     if (no_telp !== undefined) updateData.no_telp = no_telp;
     if (id_gedung) updateData.id_gedung = Number(id_gedung);
     if (password) updateData.password = await bcrypt.hash(password, 10);
@@ -430,36 +451,62 @@ const getDashboardStats = async (req, res) => {
 
 /**
  * GET /api/admin/dashboard/kehadiran-per-gedung
- * Return persentase kehadiran per asrama
+ * Return persentase kehadiran per asrama BULAN INI (agar konsisten dengan tampilan dashboard)
  */
 const getKehadiranPerGedung = async (req, res) => {
   try {
+    const now = new Date();
+    // Jika ada query ?periode=2026-07, gunakan itu; default bulan ini
+    let startBulan, endBulan;
+    if (req.query.periode) {
+      const [yr, mo] = req.query.periode.split('-').map(Number);
+      startBulan = new Date(yr, mo - 1, 1);
+      endBulan   = new Date(yr, mo, 0, 23, 59, 59);
+    } else {
+      startBulan = new Date(now.getFullYear(), now.getMonth(), 1);
+      endBulan   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+
     const gedungAll = await prisma.gedung.findMany({
       select: { id_gedung: true, nama_gedung: true },
+      orderBy: { nama_gedung: 'asc' }
     });
 
     const hasil = [];
 
     for (const g of gedungAll) {
-      // Ambil absensi HANYA dari mahasiswa yang status_hunian = "AKTIF"
+      // Hitung dari record kehadiran di bulan yang dipilih, hanya mahasiswa AKTIF
       const absensiGedung = await prisma.kehadiran.findMany({
         where: {
           kegiatan: { id_gedung: g.id_gedung },
           mahasiswa: { status_hunian: "AKTIF" },
+          waktu_absen: { gte: startBulan, lte: endBulan }
         },
         select: { status_kehadiran: true },
       });
 
       const total = absensiGedung.length;
       const hadir = absensiGedung.filter((a) => a.status_kehadiran === "HADIR").length;
+      const alpha = absensiGedung.filter((a) => a.status_kehadiran === "ALPHA").length;
+      const izin  = absensiGedung.filter((a) => a.status_kehadiran === "IZIN").length;
+      const sakit = absensiGedung.filter((a) => a.status_kehadiran === "SAKIT").length;
 
       const persentase = total > 0 ? parseFloat(((hadir / total) * 100).toFixed(1)) : 0;
+
+      // Jumlah kegiatan bulan ini untuk info
+      const jumlahKegiatan = await prisma.kegiatanPembinaan.count({
+        where: { id_gedung: g.id_gedung, tanggal_kegiatan: { gte: startBulan, lte: endBulan } }
+      });
 
       hasil.push({
         gedung: g.nama_gedung,
         persentase,
         hadir,
+        alpha,
+        izin,
+        sakit,
         total,
+        jumlah_kegiatan: jumlahKegiatan
       });
     }
 
@@ -472,6 +519,7 @@ const getKehadiranPerGedung = async (req, res) => {
     res.status(500).json({ message: "Gagal mengambil data kehadiran per gedung." });
   }
 };
+
 
 
 /**

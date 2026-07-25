@@ -27,7 +27,6 @@ const MENU_FSL = [
 const MENU_PKJ = [
   { path: '/pokja/dashboard', label: 'Dashboard', icon: <IconHome /> },
   { path: '/pokja/monitoring', label: 'Monitoring', icon: <IconMapPin /> },
-  { path: '/pokja/evaluasi', label: 'Evaluasi', icon: <IconFileText /> },
 ];
 
 function ProfilUser() {

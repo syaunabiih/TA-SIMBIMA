@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { subscribePush } from '../../utils/pushSubscription';
 
@@ -10,8 +10,32 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState({ show: false, message: '', type: '' });
 
+  useEffect(() => {
+    // Cek apakah ada alasan logout dari auto-logout
+    const logoutReason = sessionStorage.getItem('simbima_logout_reason');
+    if (logoutReason) {
+      sessionStorage.removeItem('simbima_logout_reason');
+      if (logoutReason === 'token_expired') {
+        setAlert({ show: true, message: 'Sesi Anda telah berakhir. Silakan login kembali.', type: 'warning' });
+      } else if (logoutReason === 'inactivity') {
+        setAlert({ show: true, message: 'Anda logout otomatis karena tidak ada aktivitas selama 24 jam.', type: 'warning' });
+      }
+    }
+
+    // Jika sudah login, redirect sesuai role
+    const token = localStorage.getItem('simbima_token');
+    const role = localStorage.getItem('simbima_role');
+    if (token && role) {
+      if (role === 'MAHASISWA') navigate('/mahasiswa/dashboard', { replace: true });
+      else if (role === 'FASILITATOR') navigate('/fasilitator/dashboard', { replace: true });
+      else if (role === 'SUPERADMIN') navigate('/superadmin/dashboard', { replace: true });
+      else if (role === 'KETUA_POKJA') navigate('/pokja/dashboard', { replace: true });
+    }
+  }, [navigate]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setLoading(true);
     setAlert({ show: false, message: '', type: '' });
 
@@ -23,6 +47,7 @@ function LoginPage() {
       });
 
       const data = await response.json();
+      console.log('[Login] status:', response.status, 'data:', data);
 
       if (response.ok) {
         if (data.data.isFirstLogin) {
@@ -50,9 +75,14 @@ function LoginPage() {
         }, 1000);
 
       } else {
-        setAlert({ show: true, message: data.message || 'NIM/NIP atau password salah.', type: 'error' });
+        const errorMsg = response.status === 403
+          ? (data.message || 'Akun Anda tidak aktif.')
+          : 'Username atau Password Salah.';
+        console.log('[Login] Setting error alert:', errorMsg);
+        setAlert({ show: true, message: errorMsg, type: 'error' });
       }
-    } catch {
+    } catch (err) {
+      console.log('[Login] Catch error:', err);
       setAlert({ show: true, message: 'Gagal terhubung ke server. Coba lagi.', type: 'error' });
     } finally {
       setLoading(false);
@@ -103,14 +133,33 @@ function LoginPage() {
 
         {/* Alert */}
         {alert.show && (
-          <div className={`alert-modern ${alert.type === 'success' ? 'alert-success-modern' : 'alert-error-modern'} mb-5`}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            marginBottom: '20px',
+            fontSize: '14px',
+            fontWeight: '500',
+            ...(alert.type === 'success'
+              ? { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }
+              : alert.type === 'warning'
+              ? { background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }
+              : { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }
+            )
+          }}>
             {alert.type === 'success'
               ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              : alert.type === 'warning'
+              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" strokeWidth="2"/></svg>
               : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
             }
-            <span style={{ fontSize: '14px' }}>{alert.message}</span>
+            <span>{alert.message}</span>
           </div>
         )}
+
+
 
         {/* Form */}
         <form onSubmit={handleLogin} className="fade-in-up-delay">

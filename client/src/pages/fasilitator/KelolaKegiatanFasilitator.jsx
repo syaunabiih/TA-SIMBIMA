@@ -1,9 +1,10 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FASILITATOR_MENU } from './fasilitatorMenu';
-import { apiGetKegiatan } from '../../utils/api';
+import { apiGetKegiatan, apiGetJenisKegiatan, apiCekKegiatanAktif } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
+import { useSocket } from '../../hooks/useSocket';
 
 const API = 'http://localhost:5000';
 const token = () => localStorage.getItem('simbima_token');
@@ -44,6 +45,8 @@ function KelolaKegiatanFasilitator() {
   const [filter, setFilter]               = useState('SEMUA');
   const [filterJenis, setFilterJenis]     = useState('');
   const [jenisList, setJenisList]         = useState([]);
+  const [checkingAktif, setCheckingAktif] = useState(false);
+  const [modalAktif, setModalAktif]       = useState(null); // { id_kegiatan, nama_kegiatan }
 
   useEffect(() => {
     // Tampilkan pesan sukses dari PilihPetugasPage jika ada
@@ -58,19 +61,40 @@ function KelolaKegiatanFasilitator() {
   }, []);
 
   const fetchJenisKegiatan = () => {
-    fetch(`${API}/api/admin/jenis-kegiatan`, { headers: { Authorization: `Bearer ${token()}` } })
-      .then(res => res.json())
+    apiGetJenisKegiatan()
       .then(data => {
-        if (data.status === 'Sukses') setJenisList(data.data);
+        if (data.status === 'Sukses' && Array.isArray(data.data)) setJenisList(data.data);
       })
       .catch(console.error);
   };
 
-  const fetchKegiatan = () => {
+  const fetchKegiatan = useCallback(() => {
     setLoading(true);
     apiGetKegiatan()
       .then(res => { if (res.data) setKegiatan(res.data); })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Realtime: refresh otomatis saat ada perubahan kegiatan dari server
+  useSocket('kegiatan:update', fetchKegiatan);
+  useSocket('absensi:update',  fetchKegiatan);
+
+  // Handler tombol "Buat Kegiatan" — cek dulu apakah ada kegiatan aktif di asrama
+  const handleBuatKegiatan = async () => {
+    setCheckingAktif(true);
+    try {
+      const res = await apiCekKegiatanAktif();
+      if (res.ada && res.kegiatan) {
+        setModalAktif(res.kegiatan);
+      } else {
+        navigate('/fasilitator/kegiatan/tambah');
+      }
+    } catch {
+      // Jika gagal cek (network error), tetap biarkan lanjut
+      navigate('/fasilitator/kegiatan/tambah');
+    } finally {
+      setCheckingAktif(false);
+    }
   };
 
   const FILTERS  = ['SEMUA', 'BERLANGSUNG', 'SELESAI'];
@@ -97,9 +121,22 @@ function KelolaKegiatanFasilitator() {
           </div>
           <button
             className="btn-cta"
-            onClick={() => navigate('/fasilitator/kegiatan/tambah')}
+            onClick={handleBuatKegiatan}
+            disabled={checkingAktif}
+            style={{ opacity: checkingAktif ? 0.75 : 1, cursor: checkingAktif ? 'wait' : 'pointer' }}
           >
-            <span style={{ fontSize: '18px', lineHeight: 1 }}>+</span> Buat Kegiatan
+            {checkingAktif ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite', verticalAlign: 'middle' }}>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                  <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.35)" strokeWidth="3"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+                </svg>
+                {' '}Memeriksa...
+              </>
+            ) : (
+              <><span style={{ fontSize: '18px', lineHeight: 1 }}>+</span> Buat Kegiatan</>
+            )}
           </button>
         </div>
 
@@ -262,6 +299,93 @@ function KelolaKegiatanFasilitator() {
           )}
         </div>
       </div>
+
+      {/* ── MODAL: Kegiatan Masih Berlangsung ─────────────────────────── */}
+      {modalAktif && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(15,23,42,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px',
+            backdropFilter: 'blur(6px)',
+            animation: 'fadeIn 0.2s ease',
+          }}
+          onClick={() => setModalAktif(null)}
+        >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideUp { from { opacity: 0; transform: translateY(24px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+          `}</style>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '24px',
+              padding: '36px 32px 32px',
+              width: '100%',
+              maxWidth: '400px',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.2)',
+              animation: 'slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+              textAlign: 'center',
+            }}
+          >
+            {/* Ikon peringatan */}
+            <div style={{
+              width: '68px', height: '68px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #fef9c3, #fef08a)',
+              border: '3px solid #fde047',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '30px', margin: '0 auto 20px',
+              boxShadow: '0 8px 24px rgba(234,179,8,0.28)',
+            }}>
+              ⚠️
+            </div>
+
+            <h3 style={{ margin: '0 0 12px', fontSize: '19px', fontWeight: '800', color: '#1e293b' }}>
+              Kegiatan Masih Berlangsung
+            </h3>
+            <p style={{ margin: '0 0 8px', color: '#475569', fontSize: '14px', lineHeight: '1.65' }}>
+              Kegiatan <strong style={{ color: '#0f172a' }}>"{modalAktif.nama_kegiatan}"</strong> sedang aktif di asrama ini.
+            </p>
+            <p style={{ margin: '0 0 28px', color: '#94a3b8', fontSize: '13px', lineHeight: '1.6' }}>
+              QR absensi masih bisa di-scan mahasiswa. Pastikan kegiatan tersebut sudah selesai sebelum membuat kegiatan baru.
+            </p>
+
+            {/* Tombol */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={() => navigate(`/fasilitator/kegiatan/${modalAktif.id_kegiatan}`)}
+                style={{
+                  width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: 'white', fontWeight: '700', fontSize: '14px',
+                  cursor: 'pointer', letterSpacing: '0.2px',
+                  boxShadow: '0 4px 16px rgba(16,185,129,0.35)',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(16,185,129,0.45)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 16px rgba(16,185,129,0.35)'; }}
+              >
+                Lihat Kegiatan Aktif
+              </button>
+              <button
+                onClick={() => setModalAktif(null)}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: '12px',
+                  background: '#f8fafc', border: '1.5px solid #e2e8f0',
+                  color: '#64748b', fontWeight: '600', fontSize: '14px',
+                  cursor: 'pointer', transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+              >
+                Oke, Mengerti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

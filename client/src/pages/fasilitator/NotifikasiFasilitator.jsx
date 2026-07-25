@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
@@ -306,6 +306,8 @@ function NotifikasiFasilitator() {
   // ── Realtime: refresh saat ada update perizinan ────────────────────────────
   const onPerizinanUpdate = useCallback(() => fetchNotif(true), []);
   useSocket("perizinan:update", onPerizinanUpdate);
+  useSocket("notifikasi:baru", onPerizinanUpdate); // event targeted untuk fasilitator ini
+
 
   const handleTandaiSemua = async () => {
     try { await apiTandaiSemuaDibaca(); fetchNotif(); } catch (e) {}

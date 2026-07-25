@@ -50,6 +50,25 @@ const subscribe = async (req, res) => {
   }
 };
 
+const unsubscribe = async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ message: "Endpoint is required" });
+    }
+
+    await prisma.pushSubscription.deleteMany({
+      where: { endpoint }
+    });
+
+    res.status(200).json({ message: "Unsubscribed successfully" });
+  } catch (error) {
+    console.error("Error unsubscribing:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   subscribe,
+  unsubscribe,
 };

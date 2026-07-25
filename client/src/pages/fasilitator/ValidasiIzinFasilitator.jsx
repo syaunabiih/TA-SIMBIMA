@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSocket } from '../../hooks/useSocket';
 import DashboardLayout from '../../components/layout/DashboardLayout';
@@ -22,7 +22,9 @@ function hitungTerlambat(tanggalSelesai) {
   return Math.floor((now - sel) / (1000 * 60 * 60 * 24));
 }
 function isTerlambat(iz) {
-  return iz.status_pengajuan === 'DISETUJUI' && new Date(iz.tanggal_selesai) < new Date() && !iz.returned_at;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const sel = new Date(iz.tanggal_selesai); sel.setHours(0, 0, 0, 0);
+  return iz.status_pengajuan === 'DISETUJUI' && today > sel && !iz.returned_at;
 }
 
 // ── Komponen Badge ─────────────────────────────────────────────────────────────

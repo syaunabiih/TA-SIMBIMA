@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiGetNotifikasi } from '../../utils/api';
 import { useSocket } from '../../hooks/useSocket';
-import { subscribePush } from '../../utils/pushSubscription';
+import { subscribePush, unsubscribePush } from '../../utils/pushSubscription';
+import socket from '../../lib/socket';
 
 /**
  * DashboardLayout — Layout utama yang dipakai semua role (Light Theme)
@@ -12,6 +13,9 @@ function DashboardLayout({ menuItems, children }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [toastNotif, setToastNotif] = useState(null);
+
+  const pollRef = useRef(null);
 
   useEffect(() => {
     // Fetch count setiap kali lokasi berubah (navigasi)
@@ -24,10 +28,36 @@ function DashboardLayout({ menuItems, children }) {
       } catch (err) { }
     };
     fetchNotif();
-    
-    // Pastikan user subscribe ke push notification setiap kali masuk dashboard
-    subscribePush();
   }, [location.pathname]);
+
+  // Subscribe push hanya sekali saat pertama buka dashboard (bukan setiap navigasi)
+  useEffect(() => {
+    subscribePush();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Join socket room berdasarkan role & ID agar notifikasi targeted bisa dikirim
+  useEffect(() => {
+    const role = localStorage.getItem('simbima_role');
+    const token = localStorage.getItem('simbima_token');
+    if (role && token) {
+      // Kirim join-room event ke server
+      socket.emit('join-room', { token });
+    }
+  }, []);
+
+  // ── Polling fallback 30 detik — pastikan badge selalu up-to-date ──────────
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await apiGetNotifikasi();
+        if (res?.data?.belum_dibaca !== undefined) {
+          setUnreadCount(res.data.belum_dibaca);
+        }
+      } catch (_) {}
+    };
+    pollRef.current = setInterval(poll, 30000); // setiap 30 detik
+    return () => clearInterval(pollRef.current);
+  }, []);
 
   // ── Realtime: update badge saat ada perizinan baru/diupdate ───────────
   const refetchNotif = useCallback(async () => {
@@ -38,7 +68,15 @@ function DashboardLayout({ menuItems, children }) {
       }
     } catch (_) {}
   }, []);
+  
   useSocket("perizinan:update", refetchNotif);
+  useSocket("notifikasi:baru", (data) => {
+    refetchNotif();
+    if (data && data.judul) {
+      setToastNotif(data);
+      setTimeout(() => setToastNotif(null), 5000);
+    }
+  });
 
   const nama = localStorage.getItem('simbima_nama') || 'Pengguna';
   const role = localStorage.getItem('simbima_role') || '';
@@ -49,7 +87,8 @@ function DashboardLayout({ menuItems, children }) {
     KETUA_POKJA: 'Ketua Pokja',
   }[role] || role;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await unsubscribePush();
     localStorage.clear();
     navigate('/');
   };
@@ -81,7 +120,6 @@ function DashboardLayout({ menuItems, children }) {
         top: 0,
         left: sidebarOpen ? 0 : '-260px',
         height: '100vh',
-        zIndex: 100,
         transition: 'left 0.3s ease',
         boxShadow: '2px 0 8px rgba(0,0,0,0.03)',
       }}>
@@ -254,6 +292,23 @@ function DashboardLayout({ menuItems, children }) {
           {children}
         </div>
       </main>
+
+      {/* In-App Toast Notification */}
+      {toastNotif && (
+        <div style={{
+          position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999,
+          background: '#ffffff', padding: '16px', borderRadius: '12px',
+          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+          borderLeft: '4px solid #10b981', display: 'flex', alignItems: 'flex-start',
+          gap: '12px', maxWidth: '350px'
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>{toastNotif.judul}</div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>{toastNotif.pesan}</div>
+          </div>
+          <button onClick={() => setToastNotif(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+        </div>
+      )}
     </div>
   );
 }

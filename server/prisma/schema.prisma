@@ -16,7 +16,6 @@ model Gedung {
   status_gedung       StatusGedung        @default(AKTIF)
   created_at          DateTime            @default(now())
   updated_at          DateTime            @updatedAt
-  evaluasis           EvaluasiPembinaan[]
   fasilitators        Fasilitator[]
   kegiatans           KegiatanPembinaan[]
   mahasiswas          Mahasiswa[]
@@ -54,7 +53,6 @@ model Mahasiswa {
   notifikasis        Notifikasi[]
   push_subscriptions PushSubscription[]
   perizinans         Perizinan[]
-  tugas_absen        PetugasAbsensi[]
   rekaps             RekapAbsensi[]
 
   @@index([id_fakultas], map: "mahasiswa_id_fakultas_fkey")
@@ -75,7 +73,6 @@ model Fasilitator {
   id_gedung         Int
   created_at        DateTime            @default(now())
   updated_at        DateTime            @updatedAt
-  evaluasi_terima   EvaluasiPembinaan[]
   gedung            Gedung              @relation(fields: [id_gedung], references: [id_gedung])
   kegiatan_kelola   KegiatanPembinaan[]
   notifikasis       Notifikasi[]
@@ -97,7 +94,6 @@ model KetuaPokja {
   foto_profil       String?
   created_at        DateTime            @default(now())
   updated_at        DateTime            @updatedAt
-  evaluasi_beri     EvaluasiPembinaan[]
   notifikasis       Notifikasi[]
   pushSubscriptions PushSubscription[]
 
@@ -122,9 +118,8 @@ model KegiatanPembinaan {
   id_jenis_kegiatan Int?
   fasilitator       Fasilitator      @relation(fields: [id_fasilitator], references: [id_fasilitator])
   gedung            Gedung           @relation(fields: [id_gedung], references: [id_gedung])
-  jenis_kegiatan    jenis_kegiatan?  @relation(fields: [id_jenis_kegiatan], references: [id_jenis_kegiatan])
+  jenis_kegiatan    JenisKegiatan?   @relation(fields: [id_jenis_kegiatan], references: [id_jenis_kegiatan])
   kehadirans        Kehadiran[]
-  petugas           PetugasAbsensi[]
 
   @@index([id_fasilitator], map: "kegiatan_pembinaan_id_fasilitator_fkey")
   @@index([id_gedung], map: "kegiatan_pembinaan_id_gedung_fkey")
@@ -132,23 +127,6 @@ model KegiatanPembinaan {
   @@map("kegiatan_pembinaan")
 }
 
-model PetugasAbsensi {
-  id_petugas            Int               @id @default(autoincrement())
-  lantai_tanggung_jawab Int
-  tanggal_penugasan     DateTime          @default(now())
-  status_tugas          StatusTugas       @default(DITUGASKAN)
-  waktu_submit          DateTime?
-  id_kegiatan           Int
-  id_mahasiswa          Int
-  created_at            DateTime          @default(now())
-  input_kehadirans      Kehadiran[]
-  kegiatan              KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
-  mahasiswa             Mahasiswa         @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-
-  @@index([id_kegiatan], map: "petugas_absensi_id_kegiatan_fkey")
-  @@index([id_mahasiswa], map: "petugas_absensi_id_mahasiswa_fkey")
-  @@map("petugas_absensi")
-}
 
 model Kehadiran {
   id_kehadiran     Int               @id @default(autoincrement())
@@ -157,16 +135,13 @@ model Kehadiran {
   keterangan       String?           @db.Text
   id_kegiatan      Int
   id_mahasiswa     Int
-  id_petugas_input Int?
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
   kegiatan         KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
   mahasiswa        Mahasiswa         @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
-  petugas_input    PetugasAbsensi?   @relation(fields: [id_petugas_input], references: [id_petugas])
 
   @@index([id_kegiatan], map: "kehadiran_id_kegiatan_fkey")
   @@index([id_mahasiswa], map: "kehadiran_id_mahasiswa_fkey")
-  @@index([id_petugas_input], map: "kehadiran_id_petugas_input_fkey")
   @@map("kehadiran")
 }
 
@@ -246,27 +221,6 @@ model KonfirmasiPerizinan {
   @@map("konfirmasi_perizinan")
 }
 
-model EvaluasiPembinaan {
-  id_evaluasi      Int         @id @default(autoincrement())
-  tanggal_evaluasi DateTime    @default(now())
-  catatan_evaluasi String      @db.Text
-  tindak_lanjut    String?     @db.Text
-  bulan_periode    Int
-  tahun_periode    Int
-  id_ketua_pokja   Int
-  id_fasilitator   Int
-  id_gedung        Int
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-  fasilitator      Fasilitator @relation(fields: [id_fasilitator], references: [id_fasilitator])
-  gedung           Gedung      @relation(fields: [id_gedung], references: [id_gedung])
-  ketua_pokja      KetuaPokja  @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja])
-
-  @@index([id_fasilitator], map: "evaluasi_pembinaan_id_fasilitator_fkey")
-  @@index([id_gedung], map: "evaluasi_pembinaan_id_gedung_fkey")
-  @@index([id_ketua_pokja], map: "evaluasi_pembinaan_id_ketua_pokja_fkey")
-  @@map("evaluasi_pembinaan")
-}
 
 model Notifikasi {
   id_notifikasi   Int            @id @default(autoincrement())
@@ -321,13 +275,15 @@ model fakultas {
   mahasiswa   Mahasiswa[]
 }
 
-model jenis_kegiatan {
+model JenisKegiatan {
   id_jenis_kegiatan  Int                 @id @default(autoincrement())
   nama_jenis         String              @unique
   is_wajib           Boolean             @default(false)
   created_at         DateTime            @default(now())
-  updated_at         DateTime
+  updated_at         DateTime            @updatedAt
   kegiatan_pembinaan KegiatanPembinaan[]
+
+  @@map("jenis_kegiatan")
 }
 
 model jurusan {
@@ -368,11 +324,6 @@ enum StatusKegiatan {
   SELESAI
 }
 
-enum StatusTugas {
-  DITUGASKAN
-  SELESAI
-  TIDAK_MENGERJAKAN
-}
 
 enum StatusKehadiran {
   HADIR

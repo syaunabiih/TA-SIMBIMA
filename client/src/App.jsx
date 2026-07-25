@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import useAutoLogout from './hooks/useAutoLogout';
 
 // Import halaman-halaman
 import LoginPage from './pages/auth/LoginPage';
@@ -12,7 +13,6 @@ import DashboardMahasiswa from './pages/mahasiswa/DashboardMahasiswa';
 import KegiatanMahasiswa from './pages/mahasiswa/KegiatanMahasiswa';
 import PerizinanMahasiswa from './pages/mahasiswa/PerizinanMahasiswa';
 import IzinDetailPage from './pages/mahasiswa/IzinDetailPage';
-import FormAbsensiPetugas from './pages/mahasiswa/FormAbsensiPetugas';
 import RekapMahasiswa from './pages/mahasiswa/RekapMahasiswa';
 import NotifikasiMahasiswa from './pages/mahasiswa/NotifikasiMahasiswa';
 
@@ -25,7 +25,6 @@ import GenerateRekapFasilitator from './pages/fasilitator/GenerateRekapFasilitat
 import DetailRekapFasilitator from './pages/fasilitator/DetailRekapFasilitator';
 import NotifikasiFasilitator from './pages/fasilitator/NotifikasiFasilitator';
 import TambahKegiatanPage from './pages/fasilitator/TambahKegiatanPage';
-import PilihPetugasPage from './pages/fasilitator/PilihPetugasPage';
 import DetailKegiatanPage from './pages/fasilitator/DetailKegiatanPage';
 import PerluPerhatianPage from './pages/fasilitator/PerluPerhatianPage';
 import DaftarMahasiswaPage from './pages/fasilitator/DaftarMahasiswaPage';
@@ -41,9 +40,22 @@ import DaftarMahasiswaReadOnlyPage from './pages/superadmin/DaftarMahasiswaReadO
 // Import guard
 import PrivateRoute from './components/PrivateRoute';
 
+/**
+ * AutoLogoutWatcher — Komponen pemantau sesi
+ * Harus berada di dalam BrowserRouter agar bisa pakai useNavigate.
+ * Berlaku untuk semua role (MAHASISWA, FASILITATOR, SUPERADMIN, dll).
+ * - Logout otomatis jika token JWT expired
+ * - Logout otomatis jika tidak ada aktivitas selama 24 jam
+ */
+function AutoLogoutWatcher() {
+  useAutoLogout(1440); // 24 jam inaktivitas
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <AutoLogoutWatcher />
       <Routes>
         {/* Halaman publik */}
         <Route path="/" element={<LoginPage />} />
@@ -67,9 +79,6 @@ function App() {
         <Route path="/mahasiswa/izin/:id" element={
           <PrivateRoute allowedRoles={['MAHASISWA']}><IzinDetailPage /></PrivateRoute>
         } />
-        <Route path="/absensi/:kegiatan_id" element={
-          <PrivateRoute allowedRoles={['MAHASISWA']}><FormAbsensiPetugas /></PrivateRoute>
-        } />
         <Route path="/mahasiswa/rekap" element={
           <PrivateRoute allowedRoles={['MAHASISWA']}><RekapMahasiswa /></PrivateRoute>
         } />
@@ -86,9 +95,6 @@ function App() {
         } />
         <Route path="/fasilitator/kegiatan/tambah" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><TambahKegiatanPage /></PrivateRoute>
-        } />
-        <Route path="/fasilitator/kegiatan/tambah/petugas" element={
-          <PrivateRoute allowedRoles={['FASILITATOR']}><PilihPetugasPage /></PrivateRoute>
         } />
         <Route path="/fasilitator/kegiatan/:id" element={
           <PrivateRoute allowedRoles={['FASILITATOR']}><DetailKegiatanPage /></PrivateRoute>

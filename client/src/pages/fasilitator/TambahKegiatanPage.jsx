@@ -1,8 +1,8 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FASILITATOR_MENU } from './fasilitatorMenu';
-import { apiBuatKegiatan } from '../../utils/api';
+import { apiBuatKegiatan, apiGetJenisKegiatan } from '../../utils/api';
 
 const API = 'http://localhost:5000';
 const token = () => localStorage.getItem('simbima_token');
@@ -17,6 +17,8 @@ function TambahKegiatanPage() {
   const [successMsg, setSuccessMsg]   = useState('');
   const [submitting, setSubmitting]   = useState(false);
   const [focused, setFocused]         = useState('');
+  const [loadingJenis, setLoadingJenis] = useState(true);
+  const [errorJenis, setErrorJenis]   = useState('');
   const [form, setForm] = useState({
     nama_kegiatan:    '',
     lokasi:           '',
@@ -30,23 +32,28 @@ function TambahKegiatanPage() {
   const isLokasiRequired = !selectedKegiatan?.is_wajib;
 
   useEffect(() => {
-    fetch(`${API}/api/admin/jenis-kegiatan`, { headers: { Authorization: `Bearer ${token()}` } })
-      .then(res => res.json())
+    setLoadingJenis(true);
+    setErrorJenis('');
+    apiGetJenisKegiatan()
       .then(data => {
-        if (data.status === 'Sukses') {
+        if (data.status === 'Sukses' && Array.isArray(data.data)) {
           setJenisList(data.data);
           if (data.data.length > 0) {
             const first = data.data[0];
             setForm(prev => ({
               ...prev,
               id_jenis_kegiatan: first.id_jenis_kegiatan,
-              // Auto-fill nama jika kegiatan pertama bersifat wajib
               nama_kegiatan: first.is_wajib ? first.nama_jenis : prev.nama_kegiatan,
             }));
+          } else {
+            setErrorJenis('Belum ada jenis kegiatan. Hubungi Ketua Pokja untuk menambahkannya.');
           }
+        } else {
+          setErrorJenis(data.message || 'Gagal memuat jenis kegiatan.');
         }
       })
-      .catch(err => console.error(err));
+      .catch(() => setErrorJenis('Gagal terhubung ke server. Coba muat ulang halaman.'))
+      .finally(() => setLoadingJenis(false));
   }, []);
 
   const inputStyle = (field) => ({
@@ -95,7 +102,6 @@ function TambahKegiatanPage() {
       waktu_selesai:     waktu,
       qr_durasi_menit:   Number(form.qr_durasi_menit),
       id_jenis_kegiatan: form.id_jenis_kegiatan,
-      petugas:           [],
     };
 
     try {
@@ -181,36 +187,98 @@ function TambahKegiatanPage() {
             {/* Jenis Kegiatan */}
             <div>
               <label style={{ display: 'block', color: '#475569', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
-                Jenis Kegiatan
+                Jenis Kegiatan <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                value={form.id_jenis_kegiatan}
-                onChange={e => {
-                  const val = e.target.value;
-                  const selectedJenis = jenisList.find(j => j.id_jenis_kegiatan == val);
-                  setForm({ 
-                    ...form, 
-                    id_jenis_kegiatan: val, 
-                    nama_kegiatan: selectedJenis?.is_wajib ? selectedJenis.nama_jenis : '' 
-                  });
-                }}
-                style={{ ...inputStyle('jenis'), cursor: 'pointer' }}
-                onFocus={() => setFocused('jenis')}
-                onBlur={() => setFocused('')}
-              >
-                {jenisList.map(j => (
-                  <option key={j.id_jenis_kegiatan} value={j.id_jenis_kegiatan}>
-                    {j.nama_jenis} {j.is_wajib ? '🔴' : ''}
-                  </option>
-                ))}
-              </select>
-              {jenisList.find(j => j.id_jenis_kegiatan == form.id_jenis_kegiatan)?.is_wajib && (
-                <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ background: '#fef2f2', color: '#dc2626', fontSize: '11px', fontWeight: '700', padding: '2px 10px', borderRadius: '12px', border: '1px solid #fecaca' }}>🔴 Kegiatan Wajib</span>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>berlaku untuk semua gedung</span>
+
+              {loadingJenis ? (
+                <div style={{
+                  ...inputStyle('jenis'),
+                  display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8',
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite', flexShrink: 0 }}>
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    <circle cx="12" cy="12" r="10" stroke="#cbd5e1" strokeWidth="3"/>
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="#10b981" strokeWidth="3" strokeLinecap="round"/>
+                  </svg>
+                  Memuat jenis kegiatan...
                 </div>
+              ) : errorJenis ? (
+                <div>
+                  <div style={{
+                    padding: '10px 14px', background: '#fef2f2', border: '1.5px solid #fecaca',
+                    borderRadius: '10px', color: '#dc2626', fontSize: '13px',
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                    ⚠ {errorJenis}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoadingJenis(true);
+                      setErrorJenis('');
+                      apiGetJenisKegiatan()
+                        .then(data => {
+                          if (data.status === 'Sukses' && Array.isArray(data.data)) {
+                            setJenisList(data.data);
+                            if (data.data.length > 0) {
+                              const first = data.data[0];
+                              setForm(prev => ({
+                                ...prev,
+                                id_jenis_kegiatan: first.id_jenis_kegiatan,
+                                nama_kegiatan: first.is_wajib ? first.nama_jenis : prev.nama_kegiatan,
+                              }));
+                            } else {
+                              setErrorJenis('Belum ada jenis kegiatan. Hubungi Ketua Pokja untuk menambahkannya.');
+                            }
+                          } else {
+                            setErrorJenis(data.message || 'Gagal memuat jenis kegiatan.');
+                          }
+                        })
+                        .catch(() => setErrorJenis('Gagal terhubung ke server. Coba muat ulang halaman.'))
+                        .finally(() => setLoadingJenis(false));
+                    }}
+                    style={{
+                      marginTop: '8px', padding: '6px 14px', borderRadius: '8px', fontSize: '12px',
+                      background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#475569',
+                      cursor: 'pointer', fontWeight: '500',
+                    }}
+                  >
+                    🔄 Coba lagi
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={form.id_jenis_kegiatan}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const selectedJenis = jenisList.find(j => j.id_jenis_kegiatan == val);
+                      setForm({ 
+                        ...form, 
+                        id_jenis_kegiatan: val, 
+                        nama_kegiatan: selectedJenis?.is_wajib ? selectedJenis.nama_jenis : '' 
+                      });
+                    }}
+                    style={{ ...inputStyle('jenis'), cursor: 'pointer' }}
+                    onFocus={() => setFocused('jenis')}
+                    onBlur={() => setFocused('')}
+                  >
+                    {jenisList.map(j => (
+                      <option key={j.id_jenis_kegiatan} value={j.id_jenis_kegiatan}>
+                        {j.nama_jenis} {j.is_wajib ? '🔴' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {jenisList.find(j => j.id_jenis_kegiatan == form.id_jenis_kegiatan)?.is_wajib && (
+                    <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ background: '#fef2f2', color: '#dc2626', fontSize: '11px', fontWeight: '700', padding: '2px 10px', borderRadius: '12px', border: '1px solid #fecaca' }}>🔴 Kegiatan Wajib</span>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>berlaku untuk semua gedung</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
+
 
             {/* Nama Kegiatan */}
             {!jenisList.find(j => j.id_jenis_kegiatan == form.id_jenis_kegiatan)?.is_wajib && (

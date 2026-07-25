@@ -24,36 +24,59 @@ export const subscribePush = async () => {
       return;
     }
 
-    // 2. Minta izin ke user
-    const permission = await Notification.requestPermission();
-    console.log('[pushSubscription] Notification permission:', permission);
-    
-    if (permission !== 'granted') {
-      console.warn('Izin notifikasi ditolak oleh pengguna. (Cek pengaturan browser chrome://settings/content/notifications)');
-      return;
-    }
-
-    // 3. Pastikan service worker sudah ready
+    // 2. Pastikan service worker sudah ready
     const registration = await navigator.serviceWorker.ready;
 
-    // 4. Subscribe ke Push Service
+    // 3. Cek apakah sudah ada subscription aktif di browser
+    const existingSub = await registration.pushManager.getSubscription();
+    
     const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
     if (!vapidPublicKey) {
       console.error('VITE_VAPID_PUBLIC_KEY tidak ditemukan di environment variables.');
       return;
     }
 
-    const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+    let subscription = existingSub;
 
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedVapidKey
-    });
+    // Cek apakah permission ditolak di level OS / Browser
+    if (Notification.permission === 'denied') {
+      console.warn('Izin notifikasi diblokir oleh browser. Silakan izinkan dari pengaturan situs.');
+      // Munculkan alert kecil atau UI peringatan jika perlu
+      alert("Peringatan: Notifikasi browser diblokir. Anda tidak akan menerima pemberitahuan push. Silakan izinkan dari gembok URL di atas.");
+      return;
+    }
 
-    console.log('[pushSubscription] Subscription berhasil dibuat:', subscription);
+    // 4. Jika belum ada subscription atau belum diizinkan, minta izin & buat baru
+    if (!subscription || Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      console.log('[pushSubscription] Notification permission:', permission);
+      
+      if (permission !== 'granted') {
+        console.warn('Izin notifikasi ditolak oleh pengguna.');
+        return;
+      }
 
-    // 5. Kirim subscription ke backend untuk disimpan
-    // Ambil token JWT dari localStorage jika ada
+      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        });
+        console.log('[pushSubscription] Subscription baru dibuat:', subscription);
+      } catch (err) {
+        console.warn('[pushSubscription] Gagal subscribe, mencoba menghapus subscription lama...', err);
+        // Terkadang gagal karena VAPID key berubah, coba hapus yang lama (jika ada tersembunyi) lalu ulangi
+        if (existingSub) await existingSub.unsubscribe();
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        });
+      }
+    } else {
+      console.log('[pushSubscription] Menggunakan subscription yang sudah ada.');
+    }
+
+    // 5. Kirim subscription ke backend untuk disimpan (upsert berdasarkan endpoint)
     const token = localStorage.getItem('simbima_token');
     if (!token) return;
 
@@ -73,5 +96,40 @@ export const subscribePush = async () => {
     console.log('✅ Push notification berhasil di-subscribe.');
   } catch (error) {
     console.error('Gagal subscribe push notification:', error);
+  }
+};
+
+export const unsubscribePush = async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    if (subscription) {
+      const endpoint = subscription.endpoint;
+
+      // Hapus langganan di browser
+      await subscription.unsubscribe();
+      console.log('[pushSubscription] Subscription dihapus dari browser.');
+
+      // Beritahu backend untuk hapus dari database
+      const token = localStorage.getItem('simbima_token');
+      if (token) {
+        await fetch(`${import.meta.env.VITE_API_URL}/api/push/unsubscribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ endpoint })
+        });
+        console.log('✅ Push notification berhasil di-unsubscribe dari server.');
+      }
+    }
+  } catch (error) {
+    console.error('Gagal unsubscribe push notification:', error);
   }
 };

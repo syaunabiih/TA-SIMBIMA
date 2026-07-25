@@ -60,21 +60,22 @@ exports.exportLaporanMonitoring = async (req, res) => {
       const gedungs = await prisma.gedung.findMany({
         where: { status_gedung: 'AKTIF' },
         include: {
+          mahasiswas: { where: { status_hunian: 'AKTIF' }, select: { id_mahasiswa: true } },
           rekaps: {
             where: { bulan: targetMonth, tahun: targetYear }
           }
         }
       });
       data.asrama = gedungs.map(g => {
-        const totalRekap = g.rekaps.length;
+        const totalMahasiswa = g.mahasiswas.length;
         const totalHadir = g.rekaps.reduce((acc, r) => acc + r.total_hadir, 0);
-        const totalIzin = g.rekaps.reduce((acc, r) => acc + r.total_izin, 0);
-        const totalAlpha = g.rekaps.reduce((acc, r) => acc + r.total_alpha, 0);
-        const totalSemua = totalHadir + totalIzin + totalAlpha;
-        const persentase = totalSemua > 0 ? ((totalHadir / totalSemua) * 100).toFixed(2) : 0;
+        const totalIzin   = g.rekaps.reduce((acc, r) => acc + r.total_izin,  0);
+        const totalAlpha  = g.rekaps.reduce((acc, r) => acc + r.total_alpha, 0);
+        const totalSemua  = totalHadir + totalIzin + totalAlpha;
+        const persentase  = totalSemua > 0 ? ((totalHadir / totalSemua) * 100).toFixed(2) : 0;
         return {
           nama: g.nama_gedung,
-          totalMahasiswa: totalRekap,
+          totalMahasiswa,
           hadir: totalHadir,
           izin: totalIzin,
           alpha: totalAlpha,
@@ -99,7 +100,9 @@ exports.exportLaporanMonitoring = async (req, res) => {
         gedung: k.gedung.nama_gedung,
         tanggal: formatDate(k.tanggal_kegiatan),
         status: k.status_kegiatan,
-        totalHadir: k.kehadirans.filter(h => h.status_kehadiran === 'HADIR').length
+        totalHadir: k.kehadirans.filter(h => h.status_kehadiran === 'HADIR').length,
+        totalAlpha: k.kehadirans.filter(h => h.status_kehadiran === 'ALPHA').length,
+        totalIzin:  k.kehadirans.filter(h => h.status_kehadiran === 'IZIN').length,
       }));
     }
 
@@ -113,8 +116,10 @@ exports.exportLaporanMonitoring = async (req, res) => {
       });
       
       const disetujui = perizinans.filter(p => p.status_pengajuan === 'DISETUJUI').length;
-      const ditolak = perizinans.filter(p => p.status_pengajuan === 'DITOLAK').length;
-      const menunggu = perizinans.filter(p => p.status_pengajuan === 'MENUNGGU').length;
+      const ditolak   = perizinans.filter(p => p.status_pengajuan === 'DITOLAK').length;
+      const menunggu  = perizinans.filter(p => p.status_pengajuan === 'MENUNGGU').length;
+      const selesai   = perizinans.filter(p => p.status_pengajuan === 'SELESAI').length;
+      const dibatalkan = perizinans.filter(p => p.status_pengajuan === 'DIBATALKAN').length;
       
       const now = new Date();
       const terlambat = perizinans.filter(p => 
@@ -125,7 +130,7 @@ exports.exportLaporanMonitoring = async (req, res) => {
 
       data.perizinan = {
         total: perizinans.length,
-        disetujui, ditolak, menunggu,
+        disetujui, ditolak, menunggu, selesai, dibatalkan,
         terlambat: terlambat.length,
         daftarTerlambat: terlambat.map(t => ({
           nama: t.mahasiswa.nama,
@@ -245,11 +250,13 @@ exports.exportLaporanMonitoring = async (req, res) => {
       if (data.kegiatan) {
         const ws = workbook.addWorksheet('Rekap Kegiatan');
         ws.columns = [
-          { header: 'Nama Kegiatan', key: 'nama', width: 30 },
-          { header: 'Gedung', key: 'gedung', width: 25 },
-          { header: 'Tanggal', key: 'tanggal', width: 20 },
-          { header: 'Status', key: 'status', width: 15 },
-          { header: 'Total Hadir', key: 'hadir', width: 15 }
+          { header: 'Nama Kegiatan', key: 'nama',       width: 30 },
+          { header: 'Gedung',        key: 'gedung',     width: 25 },
+          { header: 'Tanggal',       key: 'tanggal',    width: 20 },
+          { header: 'Status',        key: 'status',     width: 15 },
+          { header: 'Total Hadir',   key: 'totalHadir', width: 15 },
+          { header: 'Total Alpha',   key: 'totalAlpha', width: 15 },
+          { header: 'Total Izin',    key: 'totalIzin',  width: 15 }
         ];
         ws.getRow(1).font = { bold: true };
         data.kegiatan.forEach(k => ws.addRow(k));
@@ -264,11 +271,13 @@ exports.exportLaporanMonitoring = async (req, res) => {
         ];
         ws.getRow(1).font = { bold: true };
         ws.addRows([
-          { status: 'Total Pengajuan', jumlah: data.perizinan.total },
-          { status: 'Disetujui', jumlah: data.perizinan.disetujui },
-          { status: 'Ditolak', jumlah: data.perizinan.ditolak },
-          { status: 'Menunggu', jumlah: data.perizinan.menunggu },
-          { status: 'Terlambat Balik', jumlah: data.perizinan.terlambat }
+          { status: 'Total Pengajuan',  jumlah: data.perizinan.total },
+          { status: 'Disetujui',        jumlah: data.perizinan.disetujui },
+          { status: 'Selesai',          jumlah: data.perizinan.selesai },
+          { status: 'Ditolak',          jumlah: data.perizinan.ditolak },
+          { status: 'Dibatalkan',       jumlah: data.perizinan.dibatalkan },
+          { status: 'Menunggu',         jumlah: data.perizinan.menunggu },
+          { status: 'Terlambat Balik',  jumlah: data.perizinan.terlambat }
         ]);
 
         if (data.perizinan.daftarTerlambat.length > 0) {

@@ -1,5 +1,9 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { sendPush } = require('../utils/push');
+
+// Lazy-load io untuk menghindari circular dependency
+const getIO = () => require('../index').io;
 
 // ==========================================
 // 1. Generate Rekapitulasi Absensi
@@ -105,7 +109,7 @@ const generateRekap = async (req, res) => {
       if (total_hadir === total_kegiatan) {
         // Hadir penuh, tidak ada alfa/izin/sakit sama sekali
         status_iqab = "REWARD";
-      } else if (batasAlfa !== null && total_alpha >= batasAlfa) {
+      } else if (batasAlfa !== null && total_alpha > batasAlfa) {
         status_iqab = "DAPAT_IQAB";
       } else {
         status_iqab = "BEBAS_IQAB";
@@ -142,7 +146,7 @@ const generateRekap = async (req, res) => {
       select: { id_rekap: true, id_mahasiswa: true }
     });
 
-    await Promise.all(rekapBaru.map(r =>
+    await Promise.all(rekapBaru.flatMap(r => [
       prisma.notifikasi.create({
         data: {
           judul: `Rekap Absensi ${periodeLabel} Telah Diterbitkan`,
@@ -152,14 +156,22 @@ const generateRekap = async (req, res) => {
           id_referensi: r.id_rekap,
           link_tujuan: '/mahasiswa/rekap',
         }
+      }),
+      sendPush({ id_mahasiswa: r.id_mahasiswa }, {
+        title: `Rekap Absensi Diterbitkan`,
+        body: `Hasil rekap kehadiran periode ${periodeLabel} sudah tersedia.`,
+        url: '/mahasiswa/rekap'
       })
-    ));
+    ]));
 
     res.json({
       status: "Sukses",
       message: `Berhasil men-generate rekap untuk ${rekapDibuat} mahasiswa.`,
       data: { bulan, tahun, tanggal_mulai, tanggal_selesai }
     });
+
+    // Emit realtime event agar dashboard mahasiswa update otomatis
+    try { getIO().emit("rekap:update", { message: "Rekap absensi baru tersedia" }); } catch (_) {}
 
   } catch (error) {
     console.error(error);
@@ -217,7 +229,7 @@ const publikasiRekap = async (req, res) => {
       periodeLabel = `${bulanStr} ${tahun}`;
     }
 
-    const notifPromises = dipublikasi.map(r =>
+    const notifPromises = dipublikasi.flatMap(r => [
       prisma.notifikasi.create({
         data: {
           judul: `Rekap Absensi ${periodeLabel} Telah Dipublikasi`,
@@ -226,8 +238,13 @@ const publikasiRekap = async (req, res) => {
           id_mahasiswa: r.id_mahasiswa,
           id_referensi: r.id_rekap
         }
+      }),
+      sendPush({ id_mahasiswa: r.id_mahasiswa }, {
+        title: `Rekap Absensi Dipublikasi`,
+        body: `Hasil rekap kehadiran periode ${periodeLabel} sudah tersedia.`,
+        url: '/mahasiswa/rekap'
       })
-    );
+    ]);
 
     await Promise.all(notifPromises);
 
@@ -278,6 +295,13 @@ const getDaftarRekapFasilitator = async (req, res) => {
         gedung:            { select: { nama_gedung: true, kode_gedung: true } },
       },
       orderBy: { tanggal_mulai: 'desc' },
+    });
+
+    // Urutkan manual berdasarkan tanggal_generate terbaru di atas
+    rekaps.sort((a, b) => {
+      const dateA = a.tanggal_generate ? new Date(a.tanggal_generate).getTime() : 0;
+      const dateB = b.tanggal_generate ? new Date(b.tanggal_generate).getTime() : 0;
+      return dateB - dateA;
     });
 
     res.json({ status: "Sukses", data: rekaps });
@@ -352,9 +376,10 @@ const getRiwayatRekapMahasiswa = async (req, res) => {
         persentase_kehadiran: true,
         status_reward:       true,
         status_iqab:         true,
+        tanggal_generate:    true,
         tanggal_publikasi:   true,
       },
-      orderBy: [{ tanggal_mulai: 'desc' }, { tahun: 'desc' }, { bulan: 'desc' }]
+      orderBy: [{ tanggal_generate: 'desc' }]
     });
 
     res.json({ status: "Sukses", data: riwayat });

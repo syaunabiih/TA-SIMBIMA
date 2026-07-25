@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FASILITATOR_MENU } from './fasilitatorMenu';
@@ -31,9 +31,9 @@ function RekapFasilitator() {
     try {
       const res = await apiGetRekapFasilitator();
       if (res.status === 'Sukses') {
-        // Sort by tanggal_mulai descending
-        const sorted = res.data.sort((a, b) =>
-          new Date(b.tanggal_mulai) - new Date(a.tanggal_mulai)
+        // Sort by tanggal_generate descending (terbaru di atas)
+        const sorted = (res.data || []).sort((a, b) =>
+          new Date(b.tanggal_generate || 0) - new Date(a.tanggal_generate || 0)
         );
         setRekapList(sorted);
       }

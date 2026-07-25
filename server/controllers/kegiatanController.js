@@ -1,6 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const { randomUUID } = require("crypto");
 const prisma = new PrismaClient();
+const { sendPush } = require('../utils/push');
 
 // Lazy-load io untuk menghindari circular dependency
 const getIO = () => require('../index').io;
@@ -55,10 +56,16 @@ const buatKegiatan = async (req, res) => {
     const fasilitator = await prisma.fasilitator.findUnique({ where: { id_fasilitator } });
     if (!fasilitator) return res.status(404).json({ message: "Data fasilitator tidak ditemukan." });
 
-    // Hitung qr_expires_at: sekarang + durasi_menit (default 30 menit)
-    const durasiMs = (Number(qr_durasi_menit) || 30) * 60 * 1000;
-    const qrExpiresAt = new Date(Date.now() + durasiMs);
     const tglKegiatan = new Date(tanggal_kegiatan);
+    
+    // Hitung qr_expires_at berdasarkan waktu mulai kegiatan, bukan Date.now()
+    const year = tglKegiatan.getFullYear();
+    const month = String(tglKegiatan.getMonth() + 1).padStart(2, '0');
+    const day = String(tglKegiatan.getDate()).padStart(2, '0');
+    const startTime = new Date(`${year}-${month}-${day}T${waktu_mulai}:00+07:00`);
+    
+    const durasiMs = (Number(qr_durasi_menit) || 30) * 60 * 1000;
+    const qrExpiresAt = new Date(startTime.getTime() + durasiMs);
 
     const kegiatanBaru = await prisma.kegiatanPembinaan.create({
       data: {
@@ -88,44 +95,7 @@ const buatKegiatan = async (req, res) => {
       day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    // Format BARU: petugas = [{ lantai, blok, id_mahasiswa }, ...]
-    if (Array.isArray(petugas) && petugas.length > 0) {
-      await prisma.petugasAbsensi.createMany({
-        data: petugas.map(p => ({
-          id_kegiatan: kegiatanBaru.id_kegiatan,
-          id_mahasiswa: Number(p.id_mahasiswa),
-          lantai_tanggung_jawab: Number(p.lantai),
-        }))
-      });
-      await prisma.notifikasi.createMany({
-        data: petugas.map(p => ({
-          judul: "Kamu Ditunjuk Sebagai Petugas Absensi",
-          pesan: `Kamu ditunjuk sebagai petugas absensi untuk kegiatan "${nama_kegiatan}" pada ${tglFormatted} pukul ${waktu_mulai}. Pantau form absensi di dashboard kamu.`,
-          tipe_notifikasi: "INFO",
-          id_mahasiswa: Number(p.id_mahasiswa),
-          id_referensi: kegiatanBaru.id_kegiatan,
-        }))
-      });
-    }
-    // Format LAMA: id_mahasiswa_petugas = [id, id, ...]
-    else if (Array.isArray(id_mahasiswa_petugas) && id_mahasiswa_petugas.length > 0) {
-      await prisma.petugasAbsensi.createMany({
-        data: id_mahasiswa_petugas.map(id_mhs => ({
-          id_kegiatan: kegiatanBaru.id_kegiatan,
-          id_mahasiswa: Number(id_mhs),
-          lantai_tanggung_jawab: Number(lantai_tanggung_jawab) || 1,
-        }))
-      });
-      await prisma.notifikasi.createMany({
-        data: id_mahasiswa_petugas.map(id_mhs => ({
-          judul: "Kamu Ditunjuk Sebagai Petugas Absensi",
-          pesan: `Kamu ditunjuk sebagai petugas absensi untuk kegiatan "${nama_kegiatan}" pada ${tglFormatted} pukul ${waktu_mulai}.`,
-          tipe_notifikasi: "INFO",
-          id_mahasiswa: Number(id_mhs),
-          id_referensi: kegiatanBaru.id_kegiatan,
-        }))
-      });
-    }
+
 
     // Emit realtime event ke semua client
     try { getIO().emit("kegiatan:update", { message: "Kegiatan baru ditambahkan" }); } catch (_) {}
@@ -170,9 +140,6 @@ const getDaftarKegiatan = async (req, res) => {
         }),
         // Untuk fasilitator/superadmin: tetap sertakan petugas
         ...(!isMahasiswa && {
-          petugas: {
-            include: { mahasiswa: { select: { nama: true, nim: true, nomor_kamar: true } } }
-          },
           fasilitator: { select: { nama: true } },
           gedung: { select: { id_gedung: true, nama_gedung: true } },
           jenis_kegiatan: { select: { id_jenis_kegiatan: true, nama_jenis: true, is_wajib: true } },
@@ -217,207 +184,7 @@ const getDaftarKegiatan = async (req, res) => {
   }
 };
 
-// 3. Mahasiswa (Petugas) Menginput Kehadiran
-const inputKehadiran = async (req, res) => {
-  const { id_kegiatan, daftar_hadir } = req.body;
-  // Contoh daftar_hadir: [{ id_mahasiswa: 2, status_kehadiran: "HADIR" }, ...]
 
-  try {
-    const id_user = req.user.id;
-    const role = req.user.role;
-
-    // 1. Pastikan yang mengakses adalah Mahasiswa
-    if (role !== "MAHASISWA") {
-      return res.status(403).json({ message: "Akses ditolak! Hanya mahasiswa yang bisa menginput absen." });
-    }
-
-    // 2. Cek apakah mahasiswa ini BENAR-BENAR petugas untuk kegiatan ini
-    const cekPetugas = await prisma.petugasAbsensi.findFirst({
-      where: {
-        id_kegiatan: id_kegiatan,
-        id_mahasiswa: id_user
-      },
-      include: {
-        kegiatan: true // Perlu info gedung
-      }
-    });
-
-    if (!cekPetugas) {
-      return res.status(403).json({ message: "Maaf, Anda bukan petugas absensi untuk kegiatan ini!" });
-    }
-
-    // UPDATE 4: Validasi hitung mahasiswa per lantai & blok petugas
-    // Ambil data mahasiswa petugas untuk dapatkan blok-nya
-    const dataPetugas = await prisma.mahasiswa.findUnique({
-      where: { id_mahasiswa: id_user }
-    });
-    const blokPetugas = dataPetugas?.nomor_kamar?.[0]?.toUpperCase() || '';
-
-    // Step 5: Cek status kegiatan — tolak jika sudah SELESAI
-    const kegiatanCek = await prisma.kegiatanPembinaan.findUnique({
-      where: { id_kegiatan: id_kegiatan }
-    });
-    if (kegiatanCek?.status_kegiatan === 'SELESAI') {
-      return res.status(403).json({ message: 'Presensi sudah ditutup. Kegiatan ini telah selesai.' });
-    }
-
-    const totalMahasiswaSebenarnya = await prisma.mahasiswa.count({
-      where: {
-        id_gedung: cekPetugas.kegiatan.id_gedung,
-        lantai: cekPetugas.lantai_tanggung_jawab,
-        nomor_kamar: blokPetugas ? { startsWith: blokPetugas } : undefined,
-        status_hunian: "AKTIF"
-      }
-    });
-
-    if (daftar_hadir.length !== totalMahasiswaSebenarnya) {
-      return res.status(400).json({
-        message: `Semua ${totalMahasiswaSebenarnya} mahasiswa di lantai ${cekPetugas.lantai_tanggung_jawab} blok ${blokPetugas} harus diisi statusnya.`
-      });
-    }
-
-    // 3. Siapkan data yang mau dimasukkan ke tabel Kehadiran
-    const dataInsert = daftar_hadir.map((item) => ({
-      id_kegiatan: id_kegiatan,
-      id_mahasiswa: item.id_mahasiswa,
-      id_petugas_input: cekPetugas.id_petugas, // Merekam ID petugas yang ngabsen
-      status_kehadiran: item.status_kehadiran,
-      keterangan: item.keterangan || null,
-    }));
-
-    // 4. Masukkan semua data ke database (Bisa banyak sekaligus)
-    const simpanAbsen = await prisma.kehadiran.createMany({
-      data: dataInsert,
-      skipDuplicates: true // Mencegah error kalau ada absen double
-    });
-
-    // 5. Update status tugas mahasiswa ini menjadi "SELESAI"
-    await prisma.petugasAbsensi.update({
-      where: { id_petugas: cekPetugas.id_petugas },
-      data: {
-        status_tugas: "SELESAI",
-        waktu_submit: new Date()
-      }
-    });
-
-    // Emit realtime event ke semua client
-    try { getIO().emit("absensi:update", { message: "Data absensi diperbarui" }); } catch (_) {}
-
-    res.status(201).json({
-      status: "Sukses",
-      message: `Berhasil menyimpan ${simpanAbsen.count} data kehadiran!`,
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Terjadi kesalahan pada server saat menyimpan absen." });
-  }
-};
-
-
-// 3. Mahasiswa (Petugas) Meminta Formulir Data Absensi (GET)
-const getAbsensiForm = async (req, res) => {
-  const { id_kegiatan } = req.params;
-
-  try {
-    const id_user = req.user.id;
-    const role = req.user.role;
-
-    if (role !== "MAHASISWA") {
-      return res.status(403).json({ message: "Akses ditolak! Hanya mahasiswa yang bisa menginput absen." });
-    }
-
-    // UPDATE 2: Validasi petugas terdaftar di kegiatan ini
-    const cekPetugas = await prisma.petugasAbsensi.findFirst({
-      where: { id_kegiatan: Number(id_kegiatan), id_mahasiswa: id_user }
-    });
-    if (!cekPetugas) {
-      return res.status(403).json({ message: "Kamu bukan petugas absensi untuk kegiatan ini." });
-    }
-
-    // UPDATE 1: Ambil data mahasiswa yang login untuk dapatkan lantai & blok
-    const mhsPetugas = await prisma.mahasiswa.findUnique({
-      where: { id_mahasiswa: id_user }
-    });
-    if (!mhsPetugas) {
-      return res.status(404).json({ message: "Data mahasiswa petugas tidak ditemukan." });
-    }
-
-    const lantaiPetugas = mhsPetugas.lantai;
-    const blokPetugas = mhsPetugas.nomor_kamar?.[0]?.toUpperCase() || '';
-
-    const kegiatan = await prisma.kegiatanPembinaan.findUnique({
-      where: { id_kegiatan: Number(id_kegiatan) },
-      include: { gedung: true }
-    });
-    if (!kegiatan) {
-      return res.status(404).json({ message: "Kegiatan tidak ditemukan." });
-    }
-
-    // Step 5: Guard 403 jika kegiatan sudah SELESAI
-    if (kegiatan.status_kegiatan === 'SELESAI') {
-      return res.status(403).json({ message: 'Presensi sudah ditutup. Kegiatan ini telah selesai.' });
-    }
-
-    // UPDATE 1: Filter mahasiswa hanya selantai & seblok dengan petugas
-    // Serta join dengan data kehadiran (jika fasil sudah ngisi)
-    const mahasiswa = await prisma.mahasiswa.findMany({
-      where: {
-        id_gedung: kegiatan.id_gedung,
-        lantai: lantaiPetugas,
-        nomor_kamar: blokPetugas ? { startsWith: blokPetugas } : undefined,
-        status_hunian: "AKTIF"
-      },
-      select: {
-        id_mahasiswa: true,
-        nim: true,
-        nama: true,
-        nomor_kamar: true,
-        lantai: true,
-        kehadirans: {
-          where: { id_kegiatan: Number(id_kegiatan) },
-          select: { status_kehadiran: true }
-        }
-      },
-      orderBy: { nomor_kamar: 'asc' }
-    });
-
-    // Flatten kehadirans array menjadi single string status_kehadiran
-    const formattedMahasiswa = mahasiswa.map(m => ({
-      id_mahasiswa: m.id_mahasiswa,
-      nim: m.nim,
-      nama: m.nama,
-      nomor_kamar: m.nomor_kamar,
-      lantai: m.lantai,
-      status_kehadiran: m.kehadirans?.[0]?.status_kehadiran || null
-    }));
-
-
-
-    res.json({
-      status: "Sukses",
-      data: {
-        kegiatan: {
-          id_kegiatan: kegiatan.id_kegiatan,
-          nama_kegiatan: kegiatan.nama_kegiatan,
-          tanggal_kegiatan: kegiatan.tanggal_kegiatan,
-          waktu_mulai: kegiatan.waktu_mulai,
-          gedung: kegiatan.gedung.nama_gedung,
-          lantai_tugas: lantaiPetugas,
-          blok_tugas: blokPetugas,       // UPDATE 3: tambah field blok
-          petugas_id: cekPetugas.id_petugas,
-          status_tugas: cekPetugas.status_tugas
-        },
-        lantai: lantaiPetugas,               // UPDATE 3: shortcut langsung
-        blok: blokPetugas,
-        mahasiswa: formattedMahasiswa
-      }
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Gagal mengambil data form absensi." });
-  }
-};
 
 // 4. Edit (Update) Jadwal Kegiatan
 const editKegiatan = async (req, res) => {
@@ -479,6 +246,9 @@ const hapusKegiatan = async (req, res) => {
       where: { id_kegiatan: Number(id_kegiatan) }
     });
 
+    // Emit realtime event ke semua client
+    try { getIO().emit("kegiatan:update", { message: "Kegiatan dihapus" }); } catch (_) {}
+
     res.json({
       status: "Sukses",
       message: "Jadwal kegiatan berhasil dihapus dari sistem."
@@ -525,43 +295,7 @@ const getMahasiswaAsrama = async (req, res) => {
   }
 };
 
-// FIX D: Mahasiswa cek apakah punya tugas petugas absensi yang aktif
-const getTugasSaya = async (req, res) => {
-  try {
-    if (req.user.role !== "MAHASISWA") {
-      return res.status(403).json({ message: "Akses ditolak! Hanya Mahasiswa." });
-    }
 
-    const tugasList = await prisma.petugasAbsensi.findMany({
-      where: {
-        id_mahasiswa: req.user.id,
-        status_tugas: "DITUGASKAN"
-      },
-      include: {
-        kegiatan: {
-          select: {
-            id_kegiatan: true,
-            nama_kegiatan: true,
-            tanggal_kegiatan: true,
-            waktu_mulai: true,
-            lokasi: true,
-            jenis_kegiatan: true,
-            status_kegiatan: true
-          }
-        },
-        mahasiswa: {
-          select: { nomor_kamar: true }  // untuk ambil blok (huruf pertama)
-        }
-      },
-      orderBy: { kegiatan: { tanggal_kegiatan: 'asc' } }
-    });
-
-    res.json({ status: "Sukses", data: tugasList });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Gagal mengambil data tugas absensi." });
-  }
-};
 
 // Kehadiran per blok (fasilitator lihat rekap per lantai & blok)
 const getKehadiranPerBlok = async (req, res) => {
@@ -659,14 +393,7 @@ const tutupPresensi = async (req, res) => {
       data: { status_kegiatan: 'SELESAI' },
     });
 
-    // 2. Nonaktifkan semua petugas yang masih DITUGASKAN → TIDAK_MENGERJAKAN
-    await prisma.petugasAbsensi.updateMany({
-      where: {
-        id_kegiatan: Number(id),
-        status_tugas: 'DITUGASKAN',
-      },
-      data: { status_tugas: 'TIDAK_MENGERJAKAN' },
-    });
+
 
     // Emit realtime event ke semua client
     try { getIO().emit("kegiatan:update", { message: "Presensi ditutup" }); } catch (_) {}
@@ -942,10 +669,18 @@ const scanQr = async (req, res) => {
 
     const kegiatan = kRows[0];
 
-    // b. Cek apakah QR sudah expired
+    // b. Cek apakah QR sudah expired (langsung tutup presensi tanpa tunggu cron)
     const now = new Date();
     if (kegiatan.qr_expires_at && now > new Date(kegiatan.qr_expires_at)) {
-      return res.status(400).json({ message: 'QR Code sudah expired. Silakan minta QR terbaru dari fasilitator.' });
+      // Langsung tutup presensi jika belum di-SELESAI (tidak tunggu cron)
+      if (kegiatan.status_kegiatan === 'BERLANGSUNG') {
+        await prisma.kegiatanPembinaan.update({
+          where: { id_kegiatan: kegiatan.id_kegiatan },
+          data: { status_kegiatan: 'SELESAI' }
+        });
+        try { getIO().emit("kegiatan:update", { message: "Presensi otomatis ditutup" }); } catch (_) {}
+      }
+      return res.status(400).json({ message: 'QR Code sudah expired. Waktu absensi telah habis.' });
     }
 
     // Cek kegiatan masih berlangsung
@@ -1006,10 +741,7 @@ const scanQr = async (req, res) => {
 module.exports = {
   buatKegiatan,
   getDaftarKegiatan,
-  inputKehadiran,
-  getAbsensiForm,
   getMahasiswaAsrama,
-  getTugasSaya,
   editKegiatan,
   hapusKegiatan,
   getKehadiranPerBlok,
@@ -1020,4 +752,49 @@ module.exports = {
   alfaOtomatis,
   getQrToken,
   scanQr,
+  cekKegiatanAktif,
 };
+
+// ── Cek kegiatan aktif (BERLANGSUNG) di asrama fasilitator ─────────────────────
+/**
+ * GET /api/kegiatan/cek-aktif
+ * Response: { ada: boolean, kegiatan: { id_kegiatan, nama_kegiatan, created_at } | null }
+ */
+async function cekKegiatanAktif(req, res) {
+  try {
+    if (req.user.role !== 'FASILITATOR') {
+      return res.status(403).json({ message: 'Akses ditolak.' });
+    }
+
+    const fasilitator = await prisma.fasilitator.findUnique({
+      where: { id_fasilitator: req.user.id },
+      select: { id_gedung: true },
+    });
+    if (!fasilitator) {
+      return res.status(404).json({ message: 'Data fasilitator tidak ditemukan.' });
+    }
+
+    const kegiatanAktif = await prisma.kegiatanPembinaan.findFirst({
+      where: {
+        id_gedung: fasilitator.id_gedung,
+        status_kegiatan: 'BERLANGSUNG',
+      },
+      select: {
+        id_kegiatan: true,
+        nama_kegiatan: true,
+        created_at: true,
+        jenis_kegiatan: { select: { nama_jenis: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    return res.json({
+      status: 'Sukses',
+      ada: !!kegiatanAktif,
+      kegiatan: kegiatanAktif ?? null,
+    });
+  } catch (error) {
+    console.error('cekKegiatanAktif error:', error);
+    res.status(500).json({ message: 'Gagal memeriksa kegiatan aktif.' });
+  }
+}

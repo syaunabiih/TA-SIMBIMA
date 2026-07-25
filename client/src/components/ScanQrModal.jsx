@@ -44,7 +44,7 @@ export default function ScanQrModal({ onClose }) {
 
   /* ── Stop kamera ─────────────────────────────────────────── */
   const stopCamera = () => {
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (rafRef.current) { clearTimeout(rafRef.current); rafRef.current = null; }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -158,10 +158,11 @@ export default function ScanQrModal({ onClose }) {
         }
       } catch (_) {}
 
-      rafRef.current = requestAnimationFrame(tick);
+      // Beri jeda 250ms (4 scan per detik) agar CPU/kamera tidak overheat dan lag
+      rafRef.current = setTimeout(tick, 250);
     };
 
-    rafRef.current = requestAnimationFrame(tick);
+    rafRef.current = setTimeout(tick, 250);
   };
 
   useEffect(() => {
@@ -302,9 +303,7 @@ export default function ScanQrModal({ onClose }) {
               <div style={{ color: '#6ee7b7', fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>
                 {namaKegiatan}
               </div>
-              {waktuHadir && (
-                <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px' }}>Pukul {waktuHadir}</div>
-              )}
+
               <div style={{ marginTop: '20px', color: 'rgba(255,255,255,0.25)', fontSize: '12px' }}>
                 Modal menutup otomatis...
               </div>

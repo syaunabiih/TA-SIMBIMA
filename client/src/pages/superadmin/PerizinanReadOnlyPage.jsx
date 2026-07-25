@@ -23,13 +23,17 @@ function fmtTgl(d) {
   return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const isTerlambatBalik = (izin) => 
-  izin.status_pengajuan === 'DISETUJUI' && 
-  new Date(izin.tanggal_selesai) < new Date() && 
-  !izin.returned_at;
+const isTerlambatBalik = (izin) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const batas = new Date(izin.tanggal_selesai); batas.setHours(0, 0, 0, 0);
+  return izin.status_pengajuan === 'DISETUJUI' && today > batas && !izin.returned_at;
+};
 
-const hariTerlambat = (endDate) => 
-  Math.floor((new Date() - new Date(endDate)) / (1000 * 60 * 60 * 24));
+const hariTerlambat = (endDate) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const batas = new Date(endDate); batas.setHours(0, 0, 0, 0);
+  return Math.floor((today - batas) / (1000 * 60 * 60 * 24));
+};
 
 // ── Animasi counter angka ──────────────────────────────────────────────────────
 function useCountUp(target, duration = 1000) {

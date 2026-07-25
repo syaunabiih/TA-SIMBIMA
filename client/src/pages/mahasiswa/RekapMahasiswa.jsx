@@ -152,7 +152,14 @@ function RekapMahasiswa() {
   const fetchRiwayat = async () => {
     try {
       const res = await apiGetRekapMahasiswa();
-      if (res.status === 'Sukses') setRiwayat(res.data);
+      if (res.status === 'Sukses') {
+        const sortedData = (res.data || []).sort((a, b) => {
+          const dateA = a.tanggal_generate ? new Date(a.tanggal_generate).getTime() : 0;
+          const dateB = b.tanggal_generate ? new Date(b.tanggal_generate).getTime() : 0;
+          return dateB - dateA;
+        });
+        setRiwayat(sortedData);
+      }
     } catch (e) {
       console.error(e);
     } finally {

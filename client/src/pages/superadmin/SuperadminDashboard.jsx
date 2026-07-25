@@ -407,12 +407,25 @@ export default function SuperadminDashboard() {
                             const d = payload[0].payload;
                             return (
                               <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '13px' }}>
-                                <p style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>
-                                  {d.gedung}: <span style={{ color: d.fill }}>{d.persentase}%</span>
+                                <p style={{ margin: '0 0 6px', fontWeight: '700', color: '#1e293b' }}>
+                                  {d.gedung}
                                 </p>
-                                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px' }}>
-                                  ({d.hadir} hadir dari {d.total} absen)
+                                <p style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '800', color: d.fill }}>
+                                  {d.persentase}% Kehadiran
                                 </p>
+                                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '6px', fontSize: '12px', color: '#64748b' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+                                    <span>✅ Hadir: <b style={{color:'#22c55e'}}>{d.hadir}</b></span>
+                                    <span>❌ Alpha: <b style={{color:'#ef4444'}}>{d.alpha ?? '-'}</b></span>
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginTop: '4px' }}>
+                                    <span>📋 Izin: <b style={{color:'#2563eb'}}>{d.izin ?? '-'}</b></span>
+                                    <span>🏥 Sakit: <b style={{color:'#d97706'}}>{d.sakit ?? '-'}</b></span>
+                                  </div>
+                                  <div style={{ marginTop: '4px', color: '#94a3b8' }}>
+                                    Total absen: {d.total} · {d.jumlah_kegiatan ?? '-'} kegiatan bulan ini
+                                  </div>
+                                </div>
                               </div>
                             );
                           }}

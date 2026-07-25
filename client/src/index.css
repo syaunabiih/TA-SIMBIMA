@@ -237,6 +237,11 @@ body {
   border: 1px solid #fecaca;
   color: #dc2626;
 }
+.alert-warning-modern {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
 
 /* Grid dots decorative */
 .grid-pattern {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { apiGetDashboardMahasiswa, apiGetTugasSaya, apiGetKegiatan } from '../../utils/api';
+import { apiGetDashboardMahasiswa, apiGetKegiatan } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import ScanQrModal from '../../components/ScanQrModal';
@@ -90,7 +90,7 @@ function EmptyState({ icon = '📭', msg = 'Belum ada data' }) {
 function DashboardMahasiswa() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
-  const [tugasSaya, setTugasSaya] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [kegiatanBerlangsung, setKegiatanBerlangsung] = useState([]);
@@ -98,22 +98,21 @@ function DashboardMahasiswa() {
 
   const nama = localStorage.getItem('simbima_nama') || 'Mahasiswa';
 
-  const fetchDashboard = (isPoll = false) => {
+  const fetchDashboard = useCallback((isPoll = false) => {
     if (!isPoll) setLoading(true);
     else setIsRefreshing(true);
 
-    Promise.all([apiGetDashboardMahasiswa(), apiGetTugasSaya()])
-      .then(([resDash, resTugas]) => {
+    Promise.all([apiGetDashboardMahasiswa()])
+      .then(([resDash]) => {
         if (resDash.data) setData(resDash.data);
-        if (resTugas.data) setTugasSaya(resTugas.data);
       })
       .finally(() => {
         setLoading(false);
         setIsRefreshing(false);
       });
-  };
+  }, []);
 
-  const fetchKegiatan = () => {
+  const fetchKegiatan = useCallback(() => {
     apiGetKegiatan()
       .then(res => {
         if (res.data) {
@@ -121,18 +120,20 @@ function DashboardMahasiswa() {
         }
       })
       .catch(() => {});
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboard(false);
     fetchKegiatan();
-  }, []);
+  }, [fetchDashboard, fetchKegiatan]);
 
   // ── Realtime: refresh saat ada update absensi atau kegiatan ───────────────
-  const onAbsensiUpdate = useCallback(() => { fetchDashboard(true); fetchKegiatan(); }, []);
-  const onKegiatanUpdate = useCallback(() => fetchKegiatan(), []);
+  const onAbsensiUpdate = useCallback(() => { fetchDashboard(true); fetchKegiatan(); }, [fetchDashboard, fetchKegiatan]);
+  const onKegiatanUpdate = useCallback(() => fetchKegiatan(), [fetchKegiatan]);
+  const onRekapUpdate = useCallback(() => fetchDashboard(true), [fetchDashboard]); // rekap baru dari fasilitator
   useSocket("absensi:update", onAbsensiUpdate);
   useSocket("kegiatan:update", onKegiatanUpdate);
+  useSocket("rekap:update",   onRekapUpdate);
 
   const todayLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const izinAktif = data?.izin_aktif ?? null;
@@ -220,36 +221,6 @@ function DashboardMahasiswa() {
           );
         })()}
 
-        {/* ── Banner Tugas Absensi Aktif ── */}
-        {tugasSaya.length > 0 && (
-          <div className="section-animate" style={{ marginBottom: '20px' }}>
-            {tugasSaya.map(tugas => (
-              <div key={tugas.id_petugas} style={{
-                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                border: '1px solid #f59e0b', borderLeft: '4px solid #d97706',
-                borderRadius: '14px', padding: '18px 20px',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                flexWrap: 'wrap', gap: '14px', boxShadow: '0 4px 12px rgba(251,191,36,0.2)',
-                marginBottom: '10px',
-              }}>
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: '700', color: '#92400e', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Kamu Ditunjuk Sebagai Petugas Absensi</div>
-                  <div style={{ fontSize: '17px', fontWeight: '700', color: '#78350f', marginBottom: '4px' }}>{tugas.kegiatan?.nama_kegiatan}</div>
-                  <div style={{ fontSize: '13px', color: '#92400e', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <span>{new Date(tugas.kegiatan?.tanggal_kegiatan).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-                    <span>{fmtTime(tugas.kegiatan?.waktu_mulai)}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/absensi/${tugas.kegiatan?.id_kegiatan}`)}
-                  style={{ background: '#d97706', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '14px', boxShadow: '0 2px 8px rgba(180,83,9,0.4)', whiteSpace: 'nowrap' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#b45309'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#d97706'}
-                >Buka Form Absensi</button>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ── Banner Rekap Terbaru ── */}
         {!loading && data?.rekap_terbaru && (() => {

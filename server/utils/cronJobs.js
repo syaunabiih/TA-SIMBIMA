@@ -10,42 +10,83 @@ const initCronJobs = () => {
     try {
       const now = new Date();
       
-      // Cari semua kegiatan yang masih BERLANGSUNG dan durasi QR-nya sudah habis
-      const expiredKegiatan = await prisma.kegiatanPembinaan.findMany({
-        where: {
-          status_kegiatan: 'BERLANGSUNG',
-          qr_expires_at: {
-            lte: now
-          }
-        },
-        select: { id_kegiatan: true }
+      // Cari SEMUA kegiatan yang masih BERLANGSUNG
+      const kegiatanBerlangsung = await prisma.kegiatanPembinaan.findMany({
+        where: { status_kegiatan: 'BERLANGSUNG' },
+        select: { 
+          id_kegiatan: true, 
+          id_gedung: true,
+          tanggal_kegiatan: true, 
+          waktu_selesai: true, 
+          qr_expires_at: true 
+        }
       });
 
+      const expiredKegiatan = [];
+      for (const k of kegiatanBerlangsung) {
+        let isExpired = false;
+        
+        // Cek jika durasi QR sudah habis (jika diset, gunakan patokan ini sepenuhnya)
+        if (k.qr_expires_at) {
+          if (k.qr_expires_at <= now) {
+            isExpired = true;
+          }
+        } else {
+          // Cek jika waktu_selesai kegiatan sudah terlewati (hanya jika qr_expires_at tidak ada)
+          const t_selesai = new Date(k.tanggal_kegiatan);
+          const w_selesai = new Date(k.waktu_selesai);
+          t_selesai.setHours(w_selesai.getHours(), w_selesai.getMinutes(), 0);
+          if (t_selesai <= now) {
+            isExpired = true;
+          }
+        }
+
+        if (isExpired) expiredKegiatan.push(k);
+      }
+
       if (expiredKegiatan.length > 0) {
-        const idList = expiredKegiatan.map(k => k.id_kegiatan);
+        for (const k of expiredKegiatan) {
+          // 1. Alfa Otomatis bagi yang belum absen
+          const semuaMhs = await prisma.mahasiswa.findMany({
+            where: { id_gedung: k.id_gedung, status_hunian: 'AKTIF' },
+            select: { id_mahasiswa: true }
+          });
+          
+          const sudahAda = await prisma.kehadiran.findMany({
+            where: { id_kegiatan: k.id_kegiatan },
+            select: { id_mahasiswa: true }
+          });
+          const sudahAda_ids = new Set(sudahAda.map(a => a.id_mahasiswa));
+          
+          const belumTercatat = semuaMhs.filter(m => !sudahAda_ids.has(m.id_mahasiswa));
+          
+          if (belumTercatat.length > 0) {
+            await prisma.kehadiran.createMany({
+              data: belumTercatat.map(m => ({
+                id_kegiatan: k.id_kegiatan,
+                id_mahasiswa: m.id_mahasiswa,
+                status_kehadiran: 'ALPHA',
+              }))
+            });
+          }
 
-        // 1. Update status kegiatan menjadi SELESAI
-        await prisma.kegiatanPembinaan.updateMany({
-          where: { id_kegiatan: { in: idList } },
-          data: { status_kegiatan: 'SELESAI' }
-        });
+          // 2. Tutup kegiatan dan batalkan petugas yang belum submit
+          await prisma.kegiatanPembinaan.update({
+            where: { id_kegiatan: k.id_kegiatan },
+            data: { status_kegiatan: 'SELESAI' }
+          });
+          
 
-        // 2. Nonaktifkan semua petugas yang masih DITUGASKAN -> TIDAK_MENGERJAKAN
-        await prisma.petugasAbsensi.updateMany({
-          where: {
-            id_kegiatan: { in: idList },
-            status_tugas: 'DITUGASKAN'
-          },
-          data: { status_tugas: 'TIDAK_MENGERJAKAN' }
-        });
+        }
 
-        console.log(`[CRON] ${expiredKegiatan.length} kegiatan presensi otomatis ditutup karena durasi habis.`);
+        console.log(`[CRON] ${expiredKegiatan.length} kegiatan presensi otomatis ditutup dan diabsenkan ALFA.`);
         
         // Emit socket event ke semua client agar me-refresh UI
         try { 
           const io = getIO();
           if (io) {
             io.emit("kegiatan:update", { message: "Presensi otomatis ditutup" }); 
+            io.emit("absensi:update", { message: "Kehadiran otomatis diproses" });
           }
         } catch (_) {}
       }

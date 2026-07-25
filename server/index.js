@@ -20,8 +20,22 @@ const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+const jwt = require('jsonwebtoken');
+
 io.on("connection", (socket) => {
   console.log(`🔌 Socket terhubung: ${socket.id}`);
+
+  // Join room berdasarkan user token
+  socket.on("join-room", ({ token }) => {
+    try {
+      const JWT_SECRET = process.env.JWT_SECRET || "rahasia_negara_simbima";
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const roomName = `${decoded.role.toLowerCase()}-${decoded.id}`;
+      socket.join(roomName);
+      console.log(`📡 Socket ${socket.id} join room: ${roomName}`);
+    } catch (_) { /* token invalid, skip */ }
+  });
+
   socket.on("disconnect", () => {
     console.log(`🔌 Socket terputus: ${socket.id}`);
   });

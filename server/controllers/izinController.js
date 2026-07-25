@@ -30,7 +30,7 @@ const autoRejectExpiredIzin = async () => {
         }
       });
       
-      const notifPromises = expiredIzins.map(izin => 
+      const notifPromises = expiredIzins.flatMap(izin => [
         prisma.notifikasi.create({
           data: {
             judul: `Status Pengajuan Izin: DITOLAK (Otomatis)`,
@@ -40,8 +40,13 @@ const autoRejectExpiredIzin = async () => {
             id_referensi: izin.id_perizinan,
             link_tujuan: `/mahasiswa/izin/${izin.id_perizinan}`,
           }
+        }),
+        sendPush({ id_mahasiswa: izin.id_mahasiswa }, {
+          title: `Izin DITOLAK (Otomatis)`,
+          body: `Pengajuan izin Anda ditolak otomatis oleh sistem karena melewati batas waktu validasi.`,
+          url: `/mahasiswa/izin/${izin.id_perizinan}`,
         })
-      );
+      ]);
       await Promise.all(notifPromises);
     }
   } catch (error) {
@@ -71,12 +76,14 @@ const getDaftarIzin = async (req, res) => {
     }
     // SUPERADMIN -> tidak ada filter, lihat semua perizinan
 
-    // Filter status TERLAMBAT (virtual): DISETUJUI + tanggal_selesai < now + returned_at null
+    // Filter status TERLAMBAT (virtual): DISETUJUI + tanggal_selesai < hari ini (00:00) + returned_at null
     if (status === 'TERLAMBAT') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
       whereClause = {
         ...whereClause,
         status_pengajuan: 'DISETUJUI',
-        tanggal_selesai: { lt: new Date() },
+        tanggal_selesai: { lt: todayStart },
         returned_at: null,
       };
     } else if (status && status !== 'SEMUA') {
@@ -199,7 +206,7 @@ const ajukanIzin = async (req, res) => {
             tipe_notifikasi: 'IZIN',
             id_fasilitator: fasil.id_fasilitator,
             id_referensi: izinBaru.id_perizinan,
-            link_tujuan: '/fasilitator/validasi-izin',
+            link_tujuan: '/fasilitator/perizinan',
           }
         });
         notifPromises.push(notifPromise);
@@ -210,12 +217,21 @@ const ajukanIzin = async (req, res) => {
           sendPush({ id_fasilitator: fasil.id_fasilitator }, {
             title: `Izin Baru: ${mhs.nama}`,
             body: `${mhs.nama} mengajukan izin ${namaIzin} untuk ${durasi_hari} hari.`,
-            url: '/fasilitator/validasi-izin'
+            url: '/fasilitator/perizinan'
           })
         );
+
+        // Emit event targeted ke room fasilitator yang spesifik
+        try {
+          getIO().to(`fasilitator-${fasil.id_fasilitator}`).emit('notifikasi:baru', {
+            judul: `Izin Baru: ${mhs.nama}`,
+            pesan: `${mhs.nama} mengajukan izin ${namaIzin} untuk ${durasi_hari} hari.`,
+          });
+        } catch (_) {}
       });
       await Promise.all(notifPromises);
     }
+
 
     // Emit realtime event ke semua client
     try { getIO().emit("perizinan:update", { message: "Pengajuan izin baru" }); } catch (_) {}
@@ -383,8 +399,15 @@ const konfirmasiIzin = async (req, res) => {
           tipe_notifikasi: tipeNotif,
           id_fasilitator: izin.id_fasilitator_validasi,
           id_referensi: izin.id_perizinan,
-          link_tujuan: '/fasilitator/kepulangan',
+          link_tujuan: '/fasilitator/perizinan?tab=kepulangan',
         }
+      });
+
+      // Kirim Push Notification ke Fasilitator
+      await sendPush({ id_fasilitator: izin.id_fasilitator_validasi }, {
+        title: judulNotif,
+        body: isiNotif,
+        url: '/fasilitator/perizinan?tab=kepulangan',
       });
     }
 
@@ -457,7 +480,7 @@ const uploadFotoBerangkat = async (req, res) => {
       include: { gedung: { include: { fasilitators: true } } }
     });
     if (mhs?.gedung?.fasilitators?.length) {
-      await Promise.all(mhs.gedung.fasilitators.map(fasil =>
+      await Promise.all(mhs.gedung.fasilitators.flatMap(fasil => [
         prisma.notifikasi.create({
           data: {
             judul: `Bukti Keberangkatan: ${mhs.nama}`,
@@ -465,10 +488,15 @@ const uploadFotoBerangkat = async (req, res) => {
             tipe_notifikasi: 'FOTO_BERANGKAT',
             id_fasilitator: fasil.id_fasilitator,
             id_referensi: Number(id_perizinan),
-            link_tujuan: '/fasilitator/kepulangan',
+            link_tujuan: '/fasilitator/perizinan?tab=kepulangan',
           }
-        })
-      ));
+        }),
+        sendPush({ id_fasilitator: fasil.id_fasilitator }, {
+          title: "Bukti Sampai Tujuan",
+          body: `${mhs.nama} telah mengunggah bukti sampai di tujuan.`,
+          url: '/fasilitator/perizinan?tab=kepulangan',
+        }),
+      ]));
     }
 
     // Emit realtime event ke semua client
@@ -488,7 +516,8 @@ const uploadFotoPulang = async (req, res) => {
     const id_mahasiswa = req.user.id;
 
     const izin = await prisma.perizinan.findUnique({
-      where: { id_perizinan: Number(id_perizinan) }
+      where: { id_perizinan: Number(id_perizinan) },
+      include: { mahasiswa: true }
     });
 
     if (!izin) return res.status(404).json({ message: "Data perizinan tidak ditemukan." });
@@ -528,7 +557,7 @@ const uploadFotoPulang = async (req, res) => {
       include: { gedung: { include: { fasilitators: true } } }
     });
     if (mhs2?.gedung?.fasilitators?.length) {
-      await Promise.all(mhs2.gedung.fasilitators.map(fasil =>
+      await Promise.all(mhs2.gedung.fasilitators.flatMap(fasil => [
         prisma.notifikasi.create({
           data: {
             judul: `Bukti Kepulangan: ${mhs2.nama}`,
@@ -536,10 +565,15 @@ const uploadFotoPulang = async (req, res) => {
             tipe_notifikasi: 'FOTO_PULANG',
             id_fasilitator: fasil.id_fasilitator,
             id_referensi: Number(id_perizinan),
-            link_tujuan: '/fasilitator/kepulangan',
+            link_tujuan: '/fasilitator/perizinan?tab=kepulangan',
           }
-        })
-      ));
+        }),
+        sendPush({ id_fasilitator: fasil.id_fasilitator }, {
+          title: "Bukti Kembali ke Asrama",
+          body: `${izin.mahasiswa.nama} telah mengunggah bukti kembali ke asrama.`,
+          url: '/fasilitator/perizinan?tab=kepulangan',
+        }),
+      ]));
     }
 
     // Emit realtime event ke semua client
@@ -606,9 +640,9 @@ const getTotalHariBulanIni = async (req, res) => {
     const izinBulanIni = await prisma.perizinan.findMany({
       where: {
         id_mahasiswa: Number(id_mahasiswa),
-        status_pengajuan: 'DISETUJUI',
-        tanggal_mulai: { gte: startOfMonth },
-        tanggal_selesai: { lte: endOfMonth },
+        status_pengajuan: { in: ['DISETUJUI', 'SELESAI'] },
+        tanggal_mulai: { lte: endOfMonth },
+        tanggal_selesai: { gte: startOfMonth },
       },
       select: { durasi_hari: true }
     });
@@ -696,6 +730,12 @@ const konfirmasiKembali = async (req, res) => {
         id_referensi: izin.id_perizinan,
         link_tujuan: `/mahasiswa/izin/${izin.id_perizinan}`,
       },
+    });
+
+    await sendPush({ id_mahasiswa: izin.id_mahasiswa }, {
+      title: 'Konfirmasi Kembali ke Asrama',
+      body: 'Fasilitator telah mengkonfirmasi bahwa kamu sudah kembali ke asrama. Izinmu telah selesai.',
+      url: `/mahasiswa/izin/${izin.id_perizinan}`
     });
 
     // Emit realtime event ke semua client

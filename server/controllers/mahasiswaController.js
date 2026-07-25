@@ -1,6 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const xlsx = require("xlsx");
+const { isEmailInUseGlobally, isValidEmailFormat } = require("../utils/validators");
 const prisma = new PrismaClient();
 
 // ==========================================
@@ -126,8 +127,12 @@ const tambahMahasiswaFasilitator = async (req, res) => {
     const existNim = await prisma.mahasiswa.findUnique({ where: { nim } });
     if (existNim) return res.status(409).json({ message: "NIM sudah terdaftar." });
     
-    const existEmail = await prisma.mahasiswa.findUnique({ where: { email } });
-    if (existEmail) return res.status(409).json({ message: "Email sudah terdaftar." });
+    if (!isValidEmailFormat(email)) {
+      return res.status(400).json({ message: "Format email tidak valid (contoh: nama@email.com)." });
+    }
+    
+    const emailTaken = await isEmailInUseGlobally(email);
+    if (emailTaken) return res.status(409).json({ message: "Email ini sudah terdaftar di sistem. Silakan gunakan email lain." });
 
     const tahunAktif = await prisma.tahunAkademik.findFirst({ where: { is_aktif: true } });
     if (!tahunAktif) {
@@ -173,6 +178,14 @@ const editMahasiswaFasilitator = async (req, res) => {
     }
 
     const { nama, email, lantai, nomor_kamar, id_fakultas, id_jurusan, alamat_asal, no_telp } = req.body;
+    
+    if (email) {
+      if (!isValidEmailFormat(email)) {
+        return res.status(400).json({ message: "Format email tidak valid (contoh: nama@email.com)." });
+      }
+      const emailTaken = await isEmailInUseGlobally(email, "MAHASISWA", id_mahasiswa);
+      if (emailTaken) return res.status(409).json({ message: "Email ini sudah terdaftar di sistem. Silakan gunakan email lain." });
+    }
     
     const updated = await prisma.mahasiswa.update({
       where: { id_mahasiswa },
@@ -306,8 +319,15 @@ const importMahasiswaFasilitator = async (req, res) => {
           continue;
         }
 
-        const existEmail = await prisma.mahasiswa.findUnique({ where: { email: String(row.email) } });
-        if (existEmail) {
+        const emailStr = String(row.email);
+        if (!isValidEmailFormat(emailStr)) {
+          errors.push({ baris: i + 1, nim: row.nim, pesan: "Format email tidak valid" });
+          gagal++;
+          continue;
+        }
+
+        const emailTaken = await isEmailInUseGlobally(emailStr);
+        if (emailTaken) {
           errors.push({ baris: i + 1, nim: row.nim, pesan: "Email sudah terdaftar di sistem" });
           gagal++;
           continue;

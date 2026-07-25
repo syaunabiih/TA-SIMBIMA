@@ -1,10 +1,11 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FASILITATOR_MENU } from './fasilitatorMenu';
 import { apiGetKegiatan, apiTutupPresensi, apiInputKehadiranFasil, apiEditKehadiranFasil, apiCekKelengkapanAbsensi, apiAlfaOtomatis } from '../../utils/api';
 import { createPortal } from 'react-dom';
 import QrAbsensiModal from '../../components/QrAbsensiModal';
+import { useSocket } from '../../hooks/useSocket';
 
 
 
@@ -194,7 +195,7 @@ function DetailKegiatanPage() {
     fetchStatusBlok();
   }, [id]);
 
-  const fetchStatusBlok = async () => {
+  const fetchStatusBlok = useCallback(async () => {
     try {
       const res = await apiCekKelengkapanAbsensi(id);
       if (res.status === 'Sukses' && Array.isArray(res.data)) {
@@ -203,16 +204,20 @@ function DetailKegiatanPage() {
     } catch (error) {
       console.error('Gagal fetch status blok', error);
     }
-  };
+  }, [id]);
 
-  const fetchKegiatan = () => {
+  const fetchKegiatan = useCallback(() => {
     apiGetKegiatan()
       .then(res => {
         const found = res.data?.find(k => String(k.id_kegiatan) === String(id));
         setKegiatan(found || null);
       })
       .finally(() => setLoading(false));
-  };
+  }, [id]);
+
+  // Realtime: refresh otomatis saat ada update absensi/kegiatan dari server
+  useSocket('absensi:update',  fetchStatusBlok);
+  useSocket('kegiatan:update', fetchKegiatan);
 
   // Fetch kehadiran (ekstrak agar bisa dipanggil manual setelah simpan)
   const fetchKehadiran = (slot = selectedSlot) => {

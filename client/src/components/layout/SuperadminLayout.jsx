@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { unsubscribePush } from '../../utils/pushSubscription';
 
 // ── SVG Icon Primitives ────────────────────────────────────────────────────────
 const Icon = ({ d, d2, extraPath, size = 18, fill = 'none' }) => (
@@ -107,7 +108,8 @@ function SuperadminLayout({ children }) {
 
   const nama = localStorage.getItem('simbima_nama') || 'Superadmin';
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await unsubscribePush();
     localStorage.clear();
     navigate('/');
   };
@@ -120,7 +122,6 @@ function SuperadminLayout({ children }) {
         <div
           className="sidebar-backdrop"
           onClick={() => setSidebarOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 95 }}
         />
       )}
 
@@ -137,7 +138,6 @@ function SuperadminLayout({ children }) {
           top: 0,
           left: sidebarOpen ? 0 : '-260px',
           height: '100vh',
-          zIndex: 100,
           transition: 'left 0.3s ease',
           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
         }}
@@ -308,7 +308,7 @@ function SuperadminLayout({ children }) {
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <main className="main-content">
+      <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
         {/* Top Navbar */}
         <header style={{
           height: '60px', background: '#ffffff', borderBottom: '1px solid #e2e8f0',

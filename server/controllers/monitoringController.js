@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { sendPush } = require('../utils/push');
 
 // 1. Menampilkan Data Dashboard Monitoring (Ketua Pokja)
 const getDashboardStats = async (req, res) => {
@@ -107,15 +108,35 @@ const getDashboardStats = async (req, res) => {
       };
     });
 
-    // 6. Kegiatan per gedung bulan ini
+    // 6. Statistik per gedung bulan ini: persentase kehadiran sebagai ukuran utama perkembangan asrama
     const gedungList = await prisma.gedung.findMany({ select: { id_gedung: true, nama_gedung: true, kode_gedung: true } });
     const kegiatan_per_gedung = [];
     for (const g of gedungList) {
-      const count = await prisma.kegiatanPembinaan.count({
+      const totalKegiatan = await prisma.kegiatanPembinaan.count({
         where: { id_gedung: g.id_gedung, tanggal_kegiatan: { gte: startBulan, lte: endBulan } }
       });
-      kegiatan_per_gedung.push({ gedung: g.nama_gedung, kode: g.kode_gedung, count });
+      const totalAbsen = await prisma.kehadiran.count({
+        where: { mahasiswa: { id_gedung: g.id_gedung }, waktu_absen: { gte: startBulan, lte: endBulan } }
+      });
+      const totalHadir = await prisma.kehadiran.count({
+        where: { mahasiswa: { id_gedung: g.id_gedung }, status_kehadiran: 'HADIR', waktu_absen: { gte: startBulan, lte: endBulan } }
+      });
+      const totalMahasiswa = await prisma.mahasiswa.count({
+        where: { id_gedung: g.id_gedung, status_hunian: 'AKTIF' }
+      });
+      const persenKehadiran = totalAbsen > 0 ? parseFloat(((totalHadir / totalAbsen) * 100).toFixed(1)) : 0;
+      kegiatan_per_gedung.push({
+        gedung: g.nama_gedung,
+        kode: g.kode_gedung,
+        count: totalKegiatan,
+        total_kegiatan: totalKegiatan,
+        total_mahasiswa: totalMahasiswa,
+        total_hadir: totalHadir,
+        total_absen: totalAbsen,
+        persen_kehadiran: persenKehadiran
+      });
     }
+
 
     res.json({
       status: "Sukses",
@@ -136,90 +157,4 @@ const getDashboardStats = async (req, res) => {
 };
 
 
-// 2. Input Catatan Evaluasi dari Pokja ke Fasilitator
-const tambahEvaluasi = async (req, res) => {
-  const { id_fasilitator, id_gedung, catatan_evaluasi, bulan_periode, tahun_periode } = req.body;
-
-  try {
-    const id_ketua_pokja = req.user.id;
-
-    if (req.user.role !== "KETUA_POKJA") {
-      return res.status(403).json({ message: "Akses ditolak! Hanya Ketua Pokja yang dapat memberi evaluasi." });
-    }
-
-    // Simpan data evaluasi ke database
-    const evaluasiBaru = await prisma.evaluasiPembinaan.create({
-      data: {
-        id_ketua_pokja,
-        id_fasilitator,
-        id_gedung,
-        catatan_evaluasi,
-        bulan_periode,
-        tahun_periode
-      }
-    });
-
-    // (Opsional) Disini bisa ditambah fitur pengiriman Notifikasi otomatis ke Fasilitator
-    // lewat tabel Notifikasi (sesuai schema yang kamu buat).
-    const truncateText = (text, maxLength) => {
-      if (text.length > maxLength) return text.substring(0, maxLength) + '...';
-      return text;
-    };
-
-    await prisma.notifikasi.create({
-      data: {
-        judul: "Catatan Evaluasi Baru dari Ketua Pokja",
-        pesan: truncateText(catatan_evaluasi, 100),
-        tipe_notifikasi: "INFO",
-        id_fasilitator: id_fasilitator,
-        id_referensi: evaluasiBaru.id_evaluasi
-      }
-    });
-
-    res.status(201).json({
-      status: "Sukses",
-      message: "Catatan evaluasi berhasil dikirim ke Fasilitator!",
-      data: evaluasiBaru
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Terjadi kesalahan server saat menyimpan evaluasi." });
-  }
-};
-
-// 3. Menampilkan Riwayat Evaluasi (Ketua Pokja)
-const getRiwayatEvaluasi = async (req, res) => {
-  try {
-    if (req.user.role !== "KETUA_POKJA") {
-      return res.status(403).json({ message: "Akses ditolak!" });
-    }
-
-    const { fasilitator_id } = req.query;
-    
-    let whereClause = { id_ketua_pokja: req.user.id };
-    if (fasilitator_id) {
-      whereClause.id_fasilitator = Number(fasilitator_id);
-    }
-
-    const riwayat = await prisma.evaluasiPembinaan.findMany({
-      where: whereClause,
-      include: {
-        fasilitator: { select: { nama: true } },
-        gedung: { select: { nama_gedung: true } }
-      },
-      orderBy: { tanggal_evaluasi: 'desc' }
-    });
-
-    res.json({
-      status: "Sukses",
-      message: "Riwayat evaluasi berhasil diambil",
-      data: riwayat
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Gagal memuat riwayat evaluasi." });
-  }
-};
-
-module.exports = { getDashboardStats, tambahEvaluasi, getRiwayatEvaluasi };
+module.exports = { getDashboardStats };

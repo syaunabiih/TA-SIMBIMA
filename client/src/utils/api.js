@@ -31,10 +31,22 @@ export const apiLogin = (identifier, password) =>
     body: JSON.stringify({ identifier, password }),
   }).then(res => res.json());
 
+// ─── JENIS KEGIATAN ──────────────────────────────────────────────────────────
+
+export const apiGetJenisKegiatan = () =>
+  fetch(`${BASE_URL}/admin/jenis-kegiatan`, {
+    headers: authHeader(),
+  }).then(res => res.json());
+
 // ─── KEGIATAN ─────────────────────────────────────────────────────────────────
 
 export const apiGetKegiatan = () =>
   fetch(`${BASE_URL}/kegiatan`, {
+    headers: authHeader(),
+  }).then(res => res.json());
+
+export const apiCekKegiatanAktif = () =>
+  fetch(`${BASE_URL}/kegiatan/cek-aktif`, {
     headers: authHeader(),
   }).then(res => res.json());
 
@@ -45,20 +57,8 @@ export const apiBuatKegiatan = (data) =>
     body: JSON.stringify(data),
   }).then(res => res.json());
 
-export const apiInputKehadiran = (data) =>
-  fetch(`${BASE_URL}/kegiatan/absen`, {
-    method: 'POST',
-    headers: authHeader(),
-    body: JSON.stringify(data),
-  }).then(res => res.json());
-
 export const apiGetMahasiswaAsrama = () =>
   fetch(`${BASE_URL}/kegiatan/mahasiswa-asrama`, {
-    headers: authHeader(),
-  }).then(res => res.json());
-
-export const apiGetTugasSaya = () =>
-  fetch(`${BASE_URL}/kegiatan/tugas-saya`, {
     headers: authHeader(),
   }).then(res => res.json());
 
@@ -219,13 +219,6 @@ export const apiGetPerluPerhatian = (tipe = 'ALL') =>
     headers: authHeader(),
   }).then(res => res.json());
 
-
-export const apiTambahEvaluasi = (data) =>
-  fetch(`${BASE_URL}/monitoring/evaluasi`, {
-    method: 'POST',
-    headers: authHeader(),
-    body: JSON.stringify(data),
-  }).then(res => res.json());
 
 // ─── REKAP ABSENSI ────────────────────────────────────────────────────────────
 

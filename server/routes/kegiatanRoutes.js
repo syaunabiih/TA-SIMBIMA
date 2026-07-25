@@ -1,5 +1,5 @@
 const express = require("express");
-const { buatKegiatan, getDaftarKegiatan, inputKehadiran, getAbsensiForm, getMahasiswaAsrama, getTugasSaya, editKegiatan, hapusKegiatan, getKehadiranPerBlok, tutupPresensi, buatKehadiranFasil, editKehadiranFasil, cekKelengkapanAbsensi, alfaOtomatis, getQrToken, scanQr } = require("../controllers/kegiatanController");
+const { buatKegiatan, getDaftarKegiatan, getMahasiswaAsrama, editKegiatan, hapusKegiatan, getKehadiranPerBlok, tutupPresensi, buatKehadiranFasil, editKehadiranFasil, cekKelengkapanAbsensi, alfaOtomatis, getQrToken, scanQr, cekKegiatanAktif } = require("../controllers/kegiatanController");
 const { verifyToken, isFasilitator, requireRole } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
@@ -10,11 +10,6 @@ router.get("/", verifyToken, requireRole(["SUPERADMIN", "FASILITATOR", "MAHASISW
 // Rute untuk membuat kegiatan baru (HANYA FASILITATOR)
 router.post("/buat", verifyToken, isFasilitator, buatKegiatan);
 
-// Rute untuk petugas menginput absensi
-router.post("/absen", verifyToken, inputKehadiran);
-
-// Rute GET untuk mengambil daftar mahasiswa sebagai form absensi
-router.get("/absensi-form/:id_kegiatan", verifyToken, getAbsensiForm);
 
 // ── STATIC routes HARUS sebelum /:id agar tidak ter-shadow ──────────────────
 
@@ -25,11 +20,13 @@ router.put("/kehadiran/:id", verifyToken, isFasilitator, editKehadiranFasil);
 // Daftar mahasiswa asrama (khusus Fasilitator)
 router.get("/mahasiswa-asrama", verifyToken, isFasilitator, getMahasiswaAsrama);
 
-// Tugas absensi mahasiswa yang login
-router.get("/tugas-saya", verifyToken, getTugasSaya);
+
 
 // Absensi via QR Code oleh mahasiswa (harus STATIC, sebelum /:id)
 router.post("/scan-qr", verifyToken, scanQr);
+
+// Cek apakah ada kegiatan BERLANGSUNG di asrama fasilitator (STATIC, sebelum /:id)
+router.get("/cek-aktif", verifyToken, isFasilitator, cekKegiatanAktif);
 
 // ── DYNAMIC routes /:id ──────────────────────────────────────────────────────
 
