@@ -96,8 +96,9 @@ const initCronJobs = () => {
     }
   });
 
-  // Cron job berjalan setiap hari jam 08:00 pagi untuk mengingatkan Fasilitator
-  // tentang mahasiswa yang belum kembali dari izin
+  // Cron job berjalan setiap hari jam 08:00 pagi untuk:
+  // 1. Mengingatkan Fasilitator tentang mahasiswa yang belum kembali dari izin
+  // 2. Mengingatkan Mahasiswa agar segera upload bukti izin kepulangan
   cron.schedule('0 8 * * *', async () => {
     try {
       const today = new Date();
@@ -109,15 +110,16 @@ const initCronJobs = () => {
           status_pengajuan: 'DISETUJUI',
           tanggal_selesai: { lt: today },
           konfirmasis: {
-            none: { jenis_konfirmasi: 'KEMBALI' }
+            none: { jenis_konfirmasi: 'KEMBALI_ASRAMA' }
           }
         },
         include: {
-          mahasiswa: { select: { nama: true } }
+          mahasiswa: { select: { nama: true, id_mahasiswa: true } }
         }
       });
 
       if (lateIzins.length > 0) {
+        // ── (1) Notifikasi ke Fasilitator ─────────────────────────────────────
         // Kelompokkan berdasarkan fasilitator agar tidak kirim notif satu-satu untuk fasil yang sama
         const lateByFasil = {};
         for (const izin of lateIzins) {
@@ -128,7 +130,7 @@ const initCronJobs = () => {
           lateByFasil[izin.id_fasilitator_validasi].push(izin.mahasiswa.nama);
         }
 
-        const sendPromises = Object.keys(lateByFasil).map(id_fasil => {
+        const fasilPromises = Object.keys(lateByFasil).map(id_fasil => {
           const names = lateByFasil[id_fasil];
           const bodyMsg = names.length > 2 
             ? `${names[0]}, ${names[1]} dan ${names.length - 2} lainnya belum kembali dari izin.`
@@ -137,12 +139,76 @@ const initCronJobs = () => {
           return sendPush({ id_fasilitator: Number(id_fasil) }, {
             title: 'Mahasiswa Terlambat Kembali',
             body: bodyMsg,
-            url: '/fasilitator/validasi-izin'
+            url: '/fasilitator/perizinan'
           });
         });
 
-        await Promise.allSettled(sendPromises);
-        console.log(`[CRON] Terkirim ${Object.keys(lateByFasil).length} notifikasi push untuk izin terlambat.`);
+        await Promise.allSettled(fasilPromises);
+        console.log(`[CRON] Terkirim ${Object.keys(lateByFasil).length} notifikasi push ke fasilitator untuk izin terlambat.`);
+
+        // ── (2) Notifikasi ke Mahasiswa yang bersangkutan ────────────────────
+        // Kirim 1 notif per mahasiswa per izin per hari (deduplication)
+        for (const izin of lateIzins) {
+          try {
+            const id_mahasiswa = izin.id_mahasiswa;
+
+            // Deduplication: cek apakah notif PERINGATAN untuk izin ini sudah dikirim hari ini
+            const sudahNotifHariIni = await prisma.notifikasi.findFirst({
+              where: {
+                id_mahasiswa,
+                id_referensi: izin.id_perizinan,
+                tipe_notifikasi: 'PERINGATAN',
+                tanggal_kirim: { gte: today }
+              }
+            });
+
+            if (sudahNotifHariIni) continue; // Sudah kirim hari ini, skip
+
+            // Format tanggal selesai izin untuk pesan
+            const tglSelesaiFormatted = new Date(izin.tanggal_selesai).toLocaleDateString('id-ID', {
+              day: 'numeric', month: 'long', year: 'numeric'
+            });
+
+            const judulNotif = '⏰ Segera Upload Bukti Izin';
+            const pesanNotif = `Izin kamu sudah melewati tanggal selesai (${tglSelesaiFormatted}), namun foto bukti kepulangan belum diupload. Segera upload agar statusmu tercatat dengan benar.`;
+            const linkTujuan = `/mahasiswa/izin/${izin.id_perizinan}`;
+
+            // Buat notifikasi in-app ke mahasiswa
+            await prisma.notifikasi.create({
+              data: {
+                judul: judulNotif,
+                pesan: pesanNotif,
+                tipe_notifikasi: 'PERINGATAN',
+                id_mahasiswa,
+                id_referensi: izin.id_perizinan,
+                link_tujuan: linkTujuan,
+              }
+            });
+
+            // Kirim Push Notification ke mahasiswa
+            await sendPush({ id_mahasiswa }, {
+              title: judulNotif,
+              body: pesanNotif,
+              url: linkTujuan,
+            });
+
+            // Emit socket event ke room mahasiswa yang bersangkutan
+            try {
+              const io = getIO();
+              if (io) {
+                io.to(`mahasiswa-${id_mahasiswa}`).emit('notifikasi:baru', {
+                  judul: judulNotif,
+                  pesan: pesanNotif,
+                });
+              }
+            } catch (_) {}
+
+          } catch (errMhs) {
+            console.error(`[CRON] Gagal kirim notif ke mahasiswa id=${izin.id_mahasiswa}:`, errMhs);
+          }
+        }
+
+        console.log(`[CRON] Notifikasi terlambat upload bukti izin selesai diproses untuk ${lateIzins.length} izin.`);
       }
     } catch (error) {
       console.error('[CRON] Error peringatan izin terlambat:', error);

@@ -810,3 +810,107 @@ body {
   }
 }
 
+/* ═══════════════════════════════════════════════════
+   BREAKPOINT: xs (≤ 480px) — Very Small Mobile
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* Login card padding dikurangi agar tidak terlalu sempit */
+  .glass-card.rounded-3xl {
+    padding: 24px 20px !important;
+    border-radius: 20px !important;
+  }
+
+  /* Heading utama halaman */
+  h1 {
+    font-size: 18px !important;
+    line-height: 1.3;
+  }
+  h2 {
+    font-size: 16px !important;
+  }
+
+  /* Font body sedikit lebih kecil */
+  body {
+    font-size: 14px;
+  }
+
+  /* Topbar: padding kiri-kanan minimal */
+  .topbar-header {
+    padding: 0 12px !important;
+  }
+
+  /* Tab bar dalam halaman: bisa scroll horizontal */
+  .tab-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+  .tab-scroll::-webkit-scrollbar { display: none; }
+
+  /* Stat card: angka font ukuran turun */
+  .stat-card .stat-number {
+    font-size: 22px !important;
+  }
+
+  /* Button: minimum touch target 44px */
+  button {
+    min-height: 36px;
+  }
+
+  /* Form input: font 16px agar iOS tidak auto-zoom */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Table horizontal scroll aktif */
+  .table-responsive table {
+    min-width: 480px;
+  }
+
+  /* Flex row wrap pada aksi tombol tabel */
+  .action-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Chart container: max-height lebih kecil di HP kecil */
+  .chart-container {
+    max-height: 220px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   GLOBAL TOUCH IMPROVEMENTS
+   ═══════════════════════════════════════════════════ */
+
+/* Pastikan semua gambar tidak overflow */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Mencegah teks overflow di sel tabel */
+td, th {
+  word-break: break-word;
+}
+
+/* Semua input dan button tidak auto-zoom di iOS */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Pastikan tab bar bisa scroll horizontal */
+  [style*="width: fit-content"] {
+    max-width: 100%;
+  }
+}

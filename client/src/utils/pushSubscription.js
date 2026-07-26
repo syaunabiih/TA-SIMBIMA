@@ -80,7 +80,7 @@ export const subscribePush = async () => {
     const token = localStorage.getItem('simbima_token');
     if (!token) return;
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/push/subscribe`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/push/subscribe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -118,7 +118,7 @@ export const unsubscribePush = async () => {
       // Beritahu backend untuk hapus dari database
       const token = localStorage.getItem('simbima_token');
       if (token) {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/push/unsubscribe`, {
+        await fetch(`${import.meta.env.VITE_API_URL || ''}/api/push/unsubscribe`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

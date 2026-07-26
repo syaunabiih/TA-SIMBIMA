@@ -358,56 +358,94 @@ const getDashboardStats = async (req, res) => {
       orderBy: { kode_gedung: "asc" },
     });
 
-    // 7. Tren kehadiran global — 8 kegiatan terakhir (semua gedung, HANYA kegiatan wajib, berurut)
-    // Karena 1 kegiatan = 1 gedung, kita harus group berdasarkan tanggal_kegiatan dan jenis_kegiatan
-    const recentGroupsRaw = await prisma.kegiatanPembinaan.findMany({
-      where: {
-        tanggal_kegiatan: { lte: new Date() },
-        jenis_kegiatan: { is_wajib: true }
-      },
-      select: {
-        tanggal_kegiatan: true,
-        id_jenis_kegiatan: true,
-        jenis_kegiatan: { select: { nama_jenis: true } }
-      },
-      orderBy: { tanggal_kegiatan: 'desc' },
-      distinct: ['tanggal_kegiatan', 'id_jenis_kegiatan'],
-      take: 8
-    });
+    // 7. Tren kehadiran global — 8 tanggal terakhir yang ada kegiatan wajib di sistem
+    // Logika:
+    //   - Ambil 8 tanggal unik terakhir yang ada minimal 1 kegiatan wajib di salah satu asrama
+    //   - Untuk setiap tanggal, loop per gedung:
+    //       * Gedung yang SUDAH buat kegiatan wajib → hitung dari record kehadiran aslinya
+    //       * Gedung yang BELUM buat kegiatan wajib di hari itu → seluruh mhs aktifnya dihitung ALPHA
+    //   - Jumlahkan semua untuk mendapat angka linechart keseluruhan sistem
 
+    // Helper format tanggal untuk label chart
     const formatTgl = (d) =>
       new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 
+    // Ambil semua gedung + jumlah mhs aktif
+    const semuaGedung = await prisma.gedung.findMany({
+
+      select: {
+        id_gedung: true,
+        nama_gedung: true,
+        mahasiswas: {
+          where: { status_hunian: 'AKTIF' },
+          select: { id_mahasiswa: true }
+        }
+      }
+    });
+
+    // Ambil 8 tanggal unik terbaru yang ada kegiatan wajib di sistem (dari asrama manapun)
+    // Tidak filter lte:today agar kegiatan hari ini (WIB) tidak terpotong karena UTC offset
+    const tanggalUnikRaw = await prisma.kegiatanPembinaan.findMany({
+      where: {
+        jenis_kegiatan: { is_wajib: true }
+      },
+      select: { tanggal_kegiatan: true },
+      orderBy: { tanggal_kegiatan: 'desc' },
+      distinct: ['tanggal_kegiatan'],
+      take: 8
+    });
+
     const tren_kehadiran_global = await Promise.all(
-      recentGroupsRaw.map(async (group) => {
-        const kegiatans = await prisma.kegiatanPembinaan.findMany({
-          where: {
-            tanggal_kegiatan: group.tanggal_kegiatan,
-            id_jenis_kegiatan: group.id_jenis_kegiatan
-          },
-          include: {
-            kehadirans: { select: { status_kehadiran: true } }
-          }
-        });
-
+      tanggalUnikRaw.map(async ({ tanggal_kegiatan }) => {
         let hadir = 0, alpha = 0, izin = 0, sakit = 0;
-        kegiatans.forEach(k => {
-          k.kehadirans.forEach(ab => {
-            if (ab.status_kehadiran === "HADIR") hadir++;
-            else if (ab.status_kehadiran === "ALPHA") alpha++;
-            else if (ab.status_kehadiran === "IZIN") izin++;
-            else if (ab.status_kehadiran === "SAKIT") sakit++;
-          });
-        });
 
-        const namaShort = group.jenis_kegiatan.nama_jenis.length > 16
-          ? group.jenis_kegiatan.nama_jenis.substring(0, 15) + "…"
-          : group.jenis_kegiatan.nama_jenis;
+        for (const gedung of semuaGedung) {
+          // Cari kegiatan wajib di gedung ini pada tanggal ini
+          const kegiatanGedung = await prisma.kegiatanPembinaan.findMany({
+            where: {
+              id_gedung: gedung.id_gedung,
+              tanggal_kegiatan,
+              jenis_kegiatan: { is_wajib: true }
+            },
+            include: {
+              kehadirans: { select: { status_kehadiran: true, id_mahasiswa: true } }
+            }
+          });
+
+          if (kegiatanGedung.length > 0) {
+            // Gedung ini buat kegiatan wajib → hitung dari record kehadiran asli
+            // Kumpulkan semua id_mahasiswa yang sudah terabsensi
+            const absensiMap = new Map(); // id_mhs → status
+            for (const k of kegiatanGedung) {
+              for (const ab of k.kehadirans) {
+                // Jika mhs sudah ada di map dengan HADIR, jangan overwrite
+                if (!absensiMap.has(ab.id_mahasiswa) || absensiMap.get(ab.id_mahasiswa) === 'ALPHA') {
+                  absensiMap.set(ab.id_mahasiswa, ab.status_kehadiran);
+                }
+              }
+            }
+            for (const status of absensiMap.values()) {
+              if (status === 'HADIR') hadir++;
+              else if (status === 'ALPHA') alpha++;
+              else if (status === 'IZIN') izin++;
+              else if (status === 'SAKIT') sakit++;
+            }
+
+            // Mhs aktif di gedung yang belum punya record kehadiran → ALPHA
+            const mhsIds = gedung.mahasiswas.map(m => m.id_mahasiswa);
+            const belumAbsen = mhsIds.filter(id => !absensiMap.has(id));
+            alpha += belumAbsen.length;
+          } else {
+            // Gedung ini TIDAK buat kegiatan wajib di hari ini
+            // → seluruh mahasiswa aktifnya dihitung ALPHA
+            alpha += gedung.mahasiswas.length;
+          }
+        }
 
         return {
-          id: `${group.tanggal_kegiatan.toISOString()}-${group.id_jenis_kegiatan}`,
-          label: namaShort,
-          tanggal: formatTgl(group.tanggal_kegiatan),
+          id: tanggal_kegiatan.toISOString(),
+          label: formatTgl(tanggal_kegiatan),
+          tanggal: formatTgl(tanggal_kegiatan),
           hadir,
           alpha,
           izin,
@@ -418,6 +456,7 @@ const getDashboardStats = async (req, res) => {
 
     // Balik urutan agar kronologis (dari kiri ke kanan di chart)
     tren_kehadiran_global.reverse();
+
 
     // 8. Total gedung
     const totalGedung = await prisma.gedung.count();

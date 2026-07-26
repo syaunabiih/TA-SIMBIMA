@@ -126,7 +126,29 @@ const getDaftarKegiatan = async (req, res) => {
 
     const isMahasiswa = req.user?.role === 'MAHASISWA';
     const isSuperadmin = req.user?.role === 'SUPERADMIN';
+    const isFasilitator = req.user?.role === 'FASILITATOR';
     const id_mahasiswa = isMahasiswa ? req.user.id : null;
+
+    // Filter kegiatan berdasarkan gedung:
+    // - Fasilitator: hanya kegiatan di gedungnya sendiri
+    // - Mahasiswa: hanya kegiatan di gedung tempat tinggalnya
+    // - Superadmin: semua kegiatan (tidak difilter)
+    if (isFasilitator) {
+      const fasilitator = await prisma.fasilitator.findUnique({
+        where: { id_fasilitator: req.user.id },
+        select: { id_gedung: true }
+      });
+      if (!fasilitator) return res.status(404).json({ message: 'Data fasilitator tidak ditemukan.' });
+      whereClause.id_gedung = fasilitator.id_gedung;
+    } else if (isMahasiswa) {
+      const mahasiswa = await prisma.mahasiswa.findUnique({
+        where: { id_mahasiswa: req.user.id },
+        select: { id_gedung: true }
+      });
+      if (!mahasiswa) return res.status(404).json({ message: 'Data mahasiswa tidak ditemukan.' });
+      whereClause.id_gedung = mahasiswa.id_gedung;
+    }
+    // Superadmin: whereClause tidak difilter id_gedung → tampil semua
 
     const daftarKegiatan = await prisma.kegiatanPembinaan.findMany({
       where: whereClause,

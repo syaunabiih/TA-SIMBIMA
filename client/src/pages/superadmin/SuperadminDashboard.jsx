@@ -3,7 +3,7 @@ import SuperadminLayout from '../../components/layout/SuperadminLayout';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList, Cell, Legend } from 'recharts';
 import { useSocket } from '../../hooks/useSocket';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('simbima_token');
 
 // ── Animasi counter angka ──────────────────────────────────────────────────────
@@ -210,6 +210,14 @@ export default function SuperadminDashboard() {
     },
   ] : [];
 
+  // Helper: konversi "2026-07" → "Juli_2026"
+  const BULAN_ID = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const periodeToLabel = (p) => {
+    if (!p) return p;
+    const [yr, mo] = p.split('-').map(Number);
+    return `${BULAN_ID[mo] || mo}_${yr}`;
+  };
+
   const handleExport = async () => {
     setExporting(true);
     setExportMsg({ type: '', text: '' });
@@ -242,7 +250,8 @@ export default function SuperadminDashboard() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Laporan_Monitoring_${exportPeriode}.${exportFormat}`;
+      // Nama file yang readable: "Laporan_Monitoring_Juli_2026.xlsx"
+      a.download = `Laporan_Monitoring_${periodeToLabel(exportPeriode)}.${exportFormat}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

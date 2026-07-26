@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 import { apiGetQrToken } from '../utils/api';
 import { useSocket } from '../hooks/useSocket';
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = `${import.meta.env.VITE_API_URL || ''}/api`;
 const getToken = () => localStorage.getItem('simbima_token');
 
 function useCountdown(expiresAt) {

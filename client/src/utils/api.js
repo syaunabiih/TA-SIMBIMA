@@ -2,7 +2,7 @@
  * utils/api.js — Pusat semua komunikasi dengan server
  */
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = `${import.meta.env.VITE_API_URL || ''}/api`;
 
 // Interceptor global untuk penanganan response 401 Unauthorized (Token Expired/Invalid)
 const originalFetch = window.fetch;

@@ -29,7 +29,7 @@ function FormKonfirmasiKepulangan({ jenis }) {
   const fetchIzinDetail = async () => {
     try {
       const token = localStorage.getItem('simbima_token');
-      const response = await fetch(`http://localhost:5000/api/izin/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/izin/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -113,7 +113,7 @@ function FormKonfirmasiKepulangan({ jenis }) {
       formData.append('foto_bukti', file);
       // Anda juga bisa append keterangan dll jika mau
 
-      const response = await fetch(`http://localhost:5000/api/izin/konfirmasi`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/izin/konfirmasi`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

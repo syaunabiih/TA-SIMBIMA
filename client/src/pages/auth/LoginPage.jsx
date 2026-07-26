@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { subscribePush } from '../../utils/pushSubscription';
+import logoAsrama from '../../assets/logo-unand.png';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ function LoginPage() {
     setAlert({ show: false, message: '', type: '' });
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
@@ -106,17 +107,15 @@ function LoginPage() {
             <div className="relative">
               <div className="logo-ring" />
               <div style={{
-                width: '64px', height: '64px',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
+                width: '72px', height: '72px',
+                background: '#ffffff',
                 borderRadius: '18px', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+                border: '1px solid #e2e8f0',
+                padding: '6px'
               }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+                <img src={logoAsrama} alt="Logo Asrama" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               </div>
             </div>
           </div>

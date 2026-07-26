@@ -28,7 +28,7 @@ export default function FirstLoginPasswordPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/auth/first-login/password', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/first-login/password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ passwordBaru })

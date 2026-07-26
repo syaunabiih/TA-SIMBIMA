@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { unsubscribePush } from '../../utils/pushSubscription';
+import logoAsrama from '../../assets/logo-unand.png';
 
 // ── SVG Icon Primitives ────────────────────────────────────────────────────────
 const Icon = ({ d, d2, extraPath, size = 18, fill = 'none' }) => (
@@ -151,17 +152,13 @@ function SuperadminLayout({ children }) {
           gap: '12px',
         }}>
           <div style={{
-            width: '40px', height: '40px', flexShrink: 0,
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            borderRadius: '10px', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 4px 16px ${THEME.primaryGlow}`,
+            width: '42px', height: '42px', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#ffffff', borderRadius: '10px', padding: '3px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            border: `1px solid ${THEME.sidebarBorder}`,
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <img src={logoAsrama} alt="Logo Asrama" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <div>
             <div style={{ color: THEME.textPrimary, fontWeight: '700', fontSize: '16px', letterSpacing: '-0.3px' }}>

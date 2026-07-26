@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import * as xlsx from 'xlsx';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('simbima_token');
 
 import { FASILITATOR_MENU } from './fasilitatorMenu';

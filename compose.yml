@@ -1,0 +1,54 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: simbima_db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: simbima_db
+      MYSQL_USER: simbima_user
+      MYSQL_PASSWORD: simbima_password
+    volumes:
+      - db_data:/var/lib/mysql
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "simbima_user", "-psimbima_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: simbima_server
+    environment:
+      PORT: 5000
+      DATABASE_URL: mysql://simbima_user:simbima_password@db:3306/simbima_db
+      JWT_SECRET: supersecretjwtkeysimbima2026
+      FRONTEND_URL: http://client
+    volumes:
+      - uploads_data:/app/public/uploads
+    expose:
+      - "5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: simbima_client
+    expose:
+      - "80"
+    depends_on:
+      - server
+    restart: always
+
+volumes:
+  db_data:
+  uploads_data:

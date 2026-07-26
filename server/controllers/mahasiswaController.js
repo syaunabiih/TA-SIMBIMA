@@ -35,7 +35,7 @@ const getProfilDanRiwayat = async (req, res) => {
           select: {
             nama_kegiatan: true,
             tanggal_kegiatan: true,
-            jenis_kegiatan: true
+            jenis_kegiatan: { select: { nama_jenis: true, is_wajib: true } }
           }
         }
       },

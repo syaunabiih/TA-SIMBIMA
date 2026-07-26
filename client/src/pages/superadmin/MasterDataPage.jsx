@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import SuperadminLayout from '../../components/layout/SuperadminLayout';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('simbima_token');
 
 const TABS = [
@@ -663,7 +663,7 @@ export default function MasterDataPage() {
         </div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {/* Card 1 - Total Gedung */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center justify-between">
             <div>

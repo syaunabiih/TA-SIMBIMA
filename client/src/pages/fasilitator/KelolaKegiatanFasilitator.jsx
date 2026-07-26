@@ -6,7 +6,7 @@ import { apiGetKegiatan, apiGetJenisKegiatan, apiCekKegiatanAktif } from '../../
 import { useCountUp } from '../../hooks/useCountUp';
 import { useSocket } from '../../hooks/useSocket';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('simbima_token');
 
 // ─── Ikon sidebar ──────────────────────────────────────────────

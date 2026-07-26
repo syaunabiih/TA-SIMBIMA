@@ -225,7 +225,7 @@ function DetailKegiatanPage() {
     const [lantai, blok] = slot.split('-');
     setLoadingKH(true);
     const token = localStorage.getItem('simbima_token');
-    fetch(`http://localhost:5000/api/kegiatan/${id}/kehadiran?lantai=${lantai}&blok=${blok}`, {
+    fetch(`${import.meta.env.VITE_API_URL || ''}/api/kegiatan/${id}/kehadiran?lantai=${lantai}&blok=${blok}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.json())

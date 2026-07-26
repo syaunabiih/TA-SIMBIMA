@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import SuperadminLayout from '../../components/layout/SuperadminLayout';
 import { useSocket } from '../../hooks/useSocket';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('simbima_token');
 
 const STATUS_COLOR = {

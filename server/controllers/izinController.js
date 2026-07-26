@@ -173,7 +173,7 @@ const ajukanIzin = async (req, res) => {
     }
 
     // Cek apakah ada upload file multer
-    const urlDokumen = req.file ? `http://localhost:5000/uploads/${req.file.filename}` : null;
+    const urlDokumen = req.file ? `/uploads/${req.file.filename}` : null;
 
     // Simpan ke tabel Perizinan
     const izinBaru = await prisma.perizinan.create({
@@ -358,7 +358,7 @@ const konfirmasiIzin = async (req, res) => {
     }
 
     // Cek apakah ada file yang diupload multer
-    const urlFoto = req.file ? `http://localhost:5000/uploads/${req.file.filename}` : null;
+    const urlFoto = req.file ? `/uploads/${req.file.filename}` : null;
 
     // Simpan data konfirmasi ke tabel KonfirmasiPerizinan
     const konfirmasiBaru = await prisma.konfirmasiPerizinan.create({
@@ -467,7 +467,7 @@ const uploadFotoBerangkat = async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ message: "File foto tidak ditemukan dalam request." });
 
-    const fotoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const fotoUrl = `/uploads/${req.file.filename}`;
 
     const updated = await prisma.perizinan.update({
       where: { id_perizinan: Number(id_perizinan) },
@@ -533,7 +533,7 @@ const uploadFotoPulang = async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ message: "File foto tidak ditemukan dalam request." });
 
-    const fotoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const fotoUrl = `/uploads/${req.file.filename}`;
 
     const updated = await prisma.perizinan.update({
       where: { id_perizinan: Number(id_perizinan) },
@@ -541,13 +541,17 @@ const uploadFotoPulang = async (req, res) => {
     });
 
     // Jika kedua foto sudah ada, ubah status menjadi SELESAI
+    // dan set returned_at agar cron job tidak menganggap mahasiswa ini masih terlambat
     const izinUpdated = await prisma.perizinan.findUnique({
       where: { id_perizinan: Number(id_perizinan) }
     });
     if (izinUpdated.foto_berangkat && izinUpdated.foto_pulang) {
       await prisma.perizinan.update({
         where: { id_perizinan: Number(id_perizinan) },
-        data: { status_pengajuan: "SELESAI" }
+        data: {
+          status_pengajuan: "SELESAI",
+          returned_at: new Date(), // ← tandai waktu kembali agar tidak masuk daftar terlambat
+        }
       });
     }
 
