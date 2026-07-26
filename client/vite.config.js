@@ -9,6 +9,8 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    host: true, // Listen on all network interfaces (0.0.0.0)
+    allowedHosts: true, // Allow any hostname (ngrok, cloudflare tunnel, localtunnel, dll.)
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
@@ -16,6 +18,11 @@ export default defineConfig({
       },
       '/uploads': {
         target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        ws: true,
         changeOrigin: true,
       },
     },
