@@ -23,6 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 server_crash_log.txt
-scratch.js
 test_date3.js
 *.bak
+
+# User uploaded files (keep directory, ignore files)
+public/uploads/*
+!public/uploads/.gitkeep
+
