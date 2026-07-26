@@ -9,12 +9,19 @@ RUN npm ci || npm install
 COPY . .
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+# Stage 2: Serve with Nginx (non-root unprivileged image)
+FROM nginxinc/nginx-unprivileged:alpine
 
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Switch to root temporarily to install curl for healthcheck
+USER root
+RUN apk add --no-cache curl
 
-EXPOSE 80
+COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
+
+# Switch back to non-root user 'nginx' (UID 101)
+USER nginx
+
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

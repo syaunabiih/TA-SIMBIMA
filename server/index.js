@@ -73,6 +73,11 @@ app.use("/api/push", pushRoutes);
 // Folder statis untuk penyimpanan file bukti
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
+// Healthcheck Route
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // Test Route (Cek apakah server jalan)
 app.get("/", (req, res) => {
   res.send("Halo! Server SIMBIMA sudah jalan 🚀");
@@ -97,7 +102,7 @@ app.get("/api/test-db", async (req, res) => {
 });
 
 // Jalankan Server (httpServer, bukan app!)
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server SIMBIMA berjalan di http://localhost:${PORT}`);
   console.log(`🔌 Socket.io aktif`);
   

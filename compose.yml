@@ -1,52 +1,62 @@
 services:
   db:
     image: mysql:8.0
-    container_name: simbima_db
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: simbima_db
-      MYSQL_USER: simbima_user
-      MYSQL_PASSWORD: simbima_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-simbima_db}
+      MYSQL_USER: ${MYSQL_USER:-simbima_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-simbima_password}
     volumes:
       - db_data:/var/lib/mysql
     expose:
       - "3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "simbima_user", "-psimbima_password"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: always
 
   server:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: simbima_server
     environment:
       PORT: 5000
-      DATABASE_URL: mysql://simbima_user:simbima_password@db:3306/simbima_db
-      JWT_SECRET: supersecretjwtkeysimbima2026
-      FRONTEND_URL: http://client
+      DATABASE_URL: mysql://${MYSQL_USER:-simbima_user}:${MYSQL_PASSWORD:-simbima_password}@db:3306/${MYSQL_DATABASE:-simbima_db}
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwtkeysimbima2026}
+      FRONTEND_URL: ${FRONTEND_URL:-http://app}
     volumes:
       - uploads_data:/app/public/uploads
     expose:
       - "5000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy
     restart: always
 
-  client:
+  app:
     build:
       context: ./client
       dockerfile: Dockerfile
-    container_name: simbima_client
     expose:
-      - "80"
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     restart: always
 
 volumes:
