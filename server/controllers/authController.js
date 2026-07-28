@@ -12,6 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "rahasia_negara_simbima";
 // ==========================================
 const login = async (req, res) => {
   const { identifier, password } = req.body; 
+  console.log(`[LOGIN ATTEMPT] identifier="${identifier}" from IP=${req.ip} (UA: ${req.get('user-agent')?.slice(0, 40)})`);
 
   if (!identifier || !password) {
     return res.status(400).json({ message: "NIM/NIP/Email dan Password wajib diisi!" });

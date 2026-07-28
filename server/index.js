@@ -59,6 +59,10 @@ const { initCronJobs } = require("./utils/cronJobs");
 // Middleware
 app.use(cors());
 app.use(express.json()); // Agar bisa baca data JSON dari frontend
+app.use((req, res, next) => {
+  console.log(`[REQ] ${req.method} ${req.url} | IP: ${req.ip} | UA: ${req.get('user-agent')?.slice(0, 60)}`);
+  next();
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/kegiatan", kegiatanRoutes);
 app.use("/api/izin", izinRoutes);

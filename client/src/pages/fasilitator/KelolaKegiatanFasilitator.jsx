@@ -261,7 +261,7 @@ function KelolaKegiatanFasilitator() {
                           </span>
                         )}
                         <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: '600', color: '#374151' }}>
-                          {k.jenis_kegiatan?.nama_jenis || 'Lainnya'}
+                          {k.jenis_kegiatan?.nama_jenis || 'Mandiri'}
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px', color: '#1e293b', fontWeight: '500' }}>{k.nama_kegiatan}</td>

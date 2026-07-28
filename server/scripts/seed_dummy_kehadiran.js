@@ -8,13 +8,12 @@ async function seedDummyKehadiran() {
     // 1. Pastikan Master Jenis Kegiatan tersedia
     const jenisWajibList = [
       { nama_jenis: 'Shalat Subuh Berjamaah', is_wajib: true },
-      { nama_jenis: 'Maghrib Mengaji & Tahsin', is_wajib: true },
-      { nama_jenis: 'Apel Malam Minggu', is_wajib: true },
+      { nama_jenis: 'Absen Malam', is_wajib: true },
+      { nama_jenis: 'Goro', is_wajib: true },
     ];
 
     const jenisMandiriList = [
-      { nama_jenis: 'Kajian Tematik Mingguan', is_wajib: false },
-      { nama_jenis: 'Gotong Royong Asrama', is_wajib: false },
+      { nama_jenis: 'Mandiri', is_wajib: false },
     ];
 
     const allJenis = [...jenisWajibList, ...jenisMandiriList];
@@ -62,10 +61,10 @@ async function seedDummyKehadiran() {
       const day = String(targetDate.getDate()).padStart(2, '0');
 
       // Pilih kegiatan wajib secara bergantian per hari
-      const namaKegiatanWajib = (i % 2 === 0) ? 'Shalat Subuh Berjamaah' : 'Maghrib Mengaji & Tahsin';
+      const namaKegiatanWajib = (i % 2 === 0) ? 'Shalat Subuh Berjamaah' : 'Absen Malam';
       const jenisWajib = jenisMap[namaKegiatanWajib];
-      const waktuMulaiWajib = (i % 2 === 0) ? '05:00' : '18:30';
-      const waktuSelesaiWajib = (i % 2 === 0) ? '05:45' : '19:30';
+      const waktuMulaiWajib = (i % 2 === 0) ? '05:00' : '21:00';
+      const waktuSelesaiWajib = (i % 2 === 0) ? '05:45' : '21:30';
 
       for (const g of gedungs) {
         // Ambil fasilitator di gedung ini
@@ -150,7 +149,7 @@ async function seedDummyKehadiran() {
 
         // Setiap 4 hari sekali, tambahkan juga 1 Kegiatan Mandiri/Optional
         if (i % 4 === 1) {
-          const jenisMandiri = jenisMap['Gotong Royong Asrama'];
+          const jenisMandiri = jenisMap['Goro'];
           let kegiatanMandiri = await prisma.kegiatanPembinaan.findFirst({
             where: {
               id_gedung: g.id_gedung,
@@ -162,7 +161,7 @@ async function seedDummyKehadiran() {
           if (!kegiatanMandiri) {
             kegiatanMandiri = await prisma.kegiatanPembinaan.create({
               data: {
-                nama_kegiatan: `Gotong Royong Asrama - ${g.nama_gedung}`,
+                nama_kegiatan: `Goro - ${g.nama_gedung}`,
                 deskripsi: `Kegiatan kebersihan lingkungan asrama akhir pekan.`,
                 tanggal_kegiatan: targetDate,
                 waktu_mulai: new Date(`1970-01-01T07:30:00+07:00`),

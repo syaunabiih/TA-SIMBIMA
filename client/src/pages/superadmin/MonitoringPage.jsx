@@ -224,7 +224,7 @@ export default function MonitoringPage() {
                           ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                               <span style={{ fontSize: '12px', fontWeight: '600', color: '#1e293b' }}>
-                                {k.jenis_kegiatan?.nama_jenis || 'Lainnya'}
+                                {k.jenis_kegiatan?.nama_jenis || 'Mandiri'}
                               </span>
                             </div>
                           )}
