@@ -1,8 +1,20 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FASILITATOR_MENU } from './fasilitatorMenu';
 import { apiBuatKegiatan, apiGetJenisKegiatan } from '../../utils/api';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+  iconUrl,
+  shadowUrl,
+  iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('simbima_token');
@@ -11,21 +23,37 @@ const token = () => localStorage.getItem('simbima_token');
 
 
 
+function LocationPicker({ position, setPosition }) {
+  useMapEvents({
+    click(e) {
+      setPosition({ lat: e.latlng.lat, lng: e.latlng.lng });
+    },
+  });
+  return position === null ? null : (
+    <Marker position={position}></Marker>
+  );
+}
+
 function TambahKegiatanPage() {
   const navigate = useNavigate();
-  const [error, setError]             = useState('');
-  const [successMsg, setSuccessMsg]   = useState('');
-  const [submitting, setSubmitting]   = useState(false);
-  const [focused, setFocused]         = useState('');
+  const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [focused, setFocused] = useState('');
   const [loadingJenis, setLoadingJenis] = useState(true);
-  const [errorJenis, setErrorJenis]   = useState('');
+  const [errorJenis, setErrorJenis] = useState('');
   const [form, setForm] = useState({
-    nama_kegiatan:    '',
-    lokasi:           '',
-    qr_durasi_menit:  30,
+    nama_kegiatan: '',
+    lokasi: '',
+    qr_durasi_menit: 30,
     id_jenis_kegiatan: '',
+    useGeofence: true,
+    latitude: '',
+    longitude: '',
+    radius_meter: 50,
   });
   const [jenisList, setJenisList] = useState([]);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   // Derived: jenis kegiatan yang sedang dipilih
   const selectedKegiatan = jenisList.find(j => j.id_jenis_kegiatan == form.id_jenis_kegiatan);
@@ -85,23 +113,37 @@ function TambahKegiatanPage() {
       setError('Durasi QR harus antara 1 – 480 menit.');
       return;
     }
+
+    if (!form.latitude || !form.longitude) {
+      setError('Latitude dan Longitude wajib diisi (Gunakan tombol Lokasi Saat Ini).');
+      return;
+    }
+    if (!form.radius_meter || form.radius_meter < 10) {
+      setError('Radius minimal 10 meter.');
+      return;
+    }
+
     setError('');
     setSubmitting(true);
 
-    const now    = new Date();
-    const pad    = (n) => String(n).padStart(2, '0');
-    const today  = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const waktu  = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const waktu = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     const payload = {
       ...form,
       // Untuk kegiatan wajib, nama_kegiatan diambil dari nama jenis
-      nama_kegiatan:     selectedKegiatan?.is_wajib ? selectedKegiatan.nama_jenis : form.nama_kegiatan,
-      tanggal_kegiatan:  today,
-      waktu_mulai:       waktu,
-      waktu_selesai:     waktu,
-      qr_durasi_menit:   Number(form.qr_durasi_menit),
+      nama_kegiatan: selectedKegiatan?.is_wajib ? selectedKegiatan.nama_jenis : form.nama_kegiatan,
+      tanggal_kegiatan: today,
+      waktu_mulai: waktu,
+      waktu_selesai: waktu,
+      qr_durasi_menit: Number(form.qr_durasi_menit),
       id_jenis_kegiatan: form.id_jenis_kegiatan,
+      // Geofencing data
+      latitude: Number(form.latitude),
+      longitude: Number(form.longitude),
+      radius_meter: Number(form.radius_meter),
     };
 
     try {
@@ -125,6 +167,33 @@ function TambahKegiatanPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleGetLocation = () => {
+    setGettingLocation(true);
+    setError('');
+    if (!navigator.geolocation) {
+      setError('Browser Anda tidak mendukung Geolocation.');
+      setGettingLocation(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm(prev => ({
+          ...prev,
+          latitude: pos.coords.latitude.toFixed(8),
+          longitude: pos.coords.longitude.toFixed(8)
+        }));
+        setGettingLocation(false);
+      },
+      (err) => {
+        let msg = 'Gagal mendapatkan lokasi.';
+        if (err.code === 1) msg = 'Akses lokasi ditolak. Silakan izinkan akses lokasi di browser.';
+        setError(msg);
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   return (
@@ -152,10 +221,10 @@ function TambahKegiatanPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <rect x="3" y="3" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2"/>
-              <rect x="13" y="3" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2"/>
-              <rect x="3" y="13" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2"/>
-              <rect x="13" y="13" width="4" height="4" rx="1" fill="white"/>
+              <rect x="3" y="3" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" />
+              <rect x="13" y="3" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" />
+              <rect x="3" y="13" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" />
+              <rect x="13" y="13" width="4" height="4" rx="1" fill="white" />
             </svg>
           </div>
           <div>
@@ -197,8 +266,8 @@ function TambahKegiatanPage() {
                 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite', flexShrink: 0 }}>
                     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                    <circle cx="12" cy="12" r="10" stroke="#cbd5e1" strokeWidth="3"/>
-                    <path d="M12 2a10 10 0 0 1 10 10" stroke="#10b981" strokeWidth="3" strokeLinecap="round"/>
+                    <circle cx="12" cy="12" r="10" stroke="#cbd5e1" strokeWidth="3" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="#10b981" strokeWidth="3" strokeLinecap="round" />
                   </svg>
                   Memuat jenis kegiatan...
                 </div>
@@ -253,10 +322,10 @@ function TambahKegiatanPage() {
                     onChange={e => {
                       const val = e.target.value;
                       const selectedJenis = jenisList.find(j => j.id_jenis_kegiatan == val);
-                      setForm({ 
-                        ...form, 
-                        id_jenis_kegiatan: val, 
-                        nama_kegiatan: selectedJenis?.is_wajib ? selectedJenis.nama_jenis : '' 
+                      setForm({
+                        ...form,
+                        id_jenis_kegiatan: val,
+                        nama_kegiatan: selectedJenis?.is_wajib ? selectedJenis.nama_jenis : ''
                       });
                     }}
                     style={{ ...inputStyle('jenis'), cursor: 'pointer' }}
@@ -337,9 +406,9 @@ function TambahKegiatanPage() {
                       fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s',
                       border: '1.5px solid',
                       background: form.qr_durasi_menit === mnt ? '#10b981' : '#f8fafc',
-                      color:      form.qr_durasi_menit === mnt ? 'white'   : '#64748b',
-                      borderColor:form.qr_durasi_menit === mnt ? '#10b981' : '#e2e8f0',
-                      boxShadow:  form.qr_durasi_menit === mnt ? '0 2px 8px rgba(16,185,129,0.3)' : 'none',
+                      color: form.qr_durasi_menit === mnt ? 'white' : '#64748b',
+                      borderColor: form.qr_durasi_menit === mnt ? '#10b981' : '#e2e8f0',
+                      boxShadow: form.qr_durasi_menit === mnt ? '0 2px 8px rgba(16,185,129,0.3)' : 'none',
                     }}
                   >
                     {mnt} mnt
@@ -371,6 +440,101 @@ function TambahKegiatanPage() {
                       : `${form.qr_durasi_menit} mnt`}
                   </span>
                 )}
+              </div>
+            </div>
+
+            {/* Geofencing */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', color: '#1e293b', fontSize: '14px', fontWeight: '600', marginBottom: '6px' }}>
+                  Lokasi Presensi (Geofencing) <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '13px' }}>
+                  Pilih titik lokasi kegiatan. Mahasiswa hanya bisa absen jika berada dalam radius dari titik ini.
+                </p>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={gettingLocation}
+                    style={{
+                      flex: 1, padding: '10px 16px', borderRadius: '8px', background: '#f8fafc', color: '#3b82f6',
+                      border: '1px solid #bfdbfe', fontSize: '13px', fontWeight: '600', cursor: gettingLocation ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                      opacity: gettingLocation ? 0.7 : 1, transition: 'all 0.2s'
+                    }}
+                  >
+                    {gettingLocation ? 'Mengambil koordinat...' : 'Gunakan Lokasi Perangkat Saat Ini'}
+                  </button>
+                </div>
+
+                <div style={{
+                  height: '250px', width: '100%', borderRadius: '12px', overflow: 'hidden',
+                  border: '1px solid #e2e8f0', marginBottom: '16px', zIndex: 0
+                }}>
+                  <MapContainer
+                    center={form.latitude && form.longitude ? [Number(form.latitude), Number(form.longitude)] : [-0.9145, 100.4607]}
+                    zoom={15}
+                    style={{ height: '100%', width: '100%', zIndex: 1 }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
+                      url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                    />
+                    <LocationPicker
+                      position={form.latitude && form.longitude ? { lat: Number(form.latitude), lng: Number(form.longitude) } : null}
+                      setPosition={(pos) => setForm({ ...form, latitude: pos.lat.toFixed(8), longitude: pos.lng.toFixed(8) })}
+                    />
+                  </MapContainer>
+                </div>
+                <p style={{ margin: '-10px 0 16px', color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>
+                  Atau klik/tap pada peta di atas untuk memilih lokasi secara manual.
+                </p>
+
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label style={{ display: 'block', color: '#475569', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={form.latitude}
+                      onChange={e => setForm({ ...form, latitude: e.target.value })}
+                      placeholder="-0.9145"
+                      style={inputStyle('lat')}
+                      onFocus={() => setFocused('lat')}
+                      onBlur={() => setFocused('')}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label style={{ display: 'block', color: '#475569', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={form.longitude}
+                      onChange={e => setForm({ ...form, longitude: e.target.value })}
+                      placeholder="100.4607"
+                      style={inputStyle('lng')}
+                      onFocus={() => setFocused('lng')}
+                      onBlur={() => setFocused('')}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', color: '#475569', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
+                    Radius Validasi (meter)
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    value={form.radius_meter}
+                    onChange={e => setForm({ ...form, radius_meter: e.target.value })}
+                    style={{ ...inputStyle('radius'), maxWidth: '120px' }}
+                    onFocus={() => setFocused('radius')}
+                    onBlur={() => setFocused('')}
+                  />
+                </div>
               </div>
             </div>
 
@@ -412,16 +576,16 @@ function TambahKegiatanPage() {
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
                     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                    <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.35)" strokeWidth="3"/>
-                    <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+                    <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
                   </svg>
                   Menyimpan...
                 </>
               ) : (
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                   Simpan &amp; Buat QR
                 </>
@@ -436,4 +600,3 @@ function TambahKegiatanPage() {
 }
 
 export default TambahKegiatanPage;
-

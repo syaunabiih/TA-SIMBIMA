@@ -60,13 +60,14 @@ export default function ScanQrModal({ onClose }) {
   };
 
   /* ── Submit token ke API ─────────────────────────────────── */
-  const submitToken = async (token) => {
+  const submitToken = async (token, latitude = null, longitude = null) => {
     const trimmed = token.trim();
     if (!trimmed) return;
     stopCamera();
     setStatus('loading');
     try {
-      const res = await apiScanQr(trimmed);
+      const payload = { qr_token: trimmed, latitude, longitude };
+      const res = await apiScanQr(payload);
       if (res.status === 'Sukses') {
         setNamaKegiatan(res.data?.nama_kegiatan || '');
         setWaktuHadir(
@@ -84,6 +85,29 @@ export default function ScanQrModal({ onClose }) {
       setMessage('Gagal terhubung ke server. Periksa koneksi.');
       setStatus('error');
     }
+  };
+
+  /* ── Proses Lokasi sebelum Submit ────────────────────────── */
+  const processQrWithLocation = (token) => {
+    stopCamera();
+    setStatus('loading');
+    setMessage('Mengambil lokasi GPS...');
+
+    if (!navigator.geolocation) {
+      submitToken(token, null, null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        // Tidak ada batasan akurasi GPS sesuai request
+        submitToken(token, pos.coords.latitude.toFixed(8), pos.coords.longitude.toFixed(8));
+      },
+      (err) => {
+        submitToken(token, null, null);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   /* ── Start kamera + scan QR ──────────────────────────────── */
@@ -138,7 +162,7 @@ export default function ScanQrModal({ onClose }) {
         if (useBarcodeDetector && detector) {
           const barcodes = await detector.detect(video);
           if (barcodes.length > 0) {
-            await submitToken(barcodes[0].rawValue);
+            processQrWithLocation(barcodes[0].rawValue);
             return;
           }
         } else if (jsQr) {
@@ -151,7 +175,7 @@ export default function ScanQrModal({ onClose }) {
             const imageData = ctx.getImageData(0, 0, w, h);
             const code = jsQr(imageData.data, imageData.width, imageData.height);
             if (code) {
-              await submitToken(code.data);
+              processQrWithLocation(code.data);
               return;
             }
           }
@@ -395,7 +419,7 @@ export default function ScanQrModal({ onClose }) {
                   type="text"
                   value={manualToken}
                   onChange={e => setManualToken(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') submitToken(manualToken); }}
+                  onKeyDown={e => { if (e.key === 'Enter') processQrWithLocation(manualToken); }}
                   placeholder="Token dari fasilitator (UUID format)"
                   autoFocus
                   style={{
@@ -427,7 +451,7 @@ export default function ScanQrModal({ onClose }) {
                   Buka Kamera
                 </button>
                 <button
-                  onClick={() => submitToken(manualToken)}
+                  onClick={() => processQrWithLocation(manualToken)}
                   disabled={!manualToken.trim()}
                   style={{
                     flex: 1, padding: '11px', borderRadius: '10px',

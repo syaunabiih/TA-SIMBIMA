@@ -45,6 +45,7 @@ const buatKegiatan = async (req, res) => {
   const {
     nama_kegiatan, tanggal_kegiatan, waktu_mulai, waktu_selesai,
     lokasi, id_jenis_kegiatan,
+    latitude, longitude, radius_meter, // Tambahan geofencing
     qr_durasi_menit,      // Durasi QR aktif dalam menit (dari frontend)
     petugas,              // Format baru: [{ lantai, blok, id_mahasiswa }]
     id_mahasiswa_petugas, // Format lama: [id, id, ...]
@@ -74,6 +75,9 @@ const buatKegiatan = async (req, res) => {
         waktu_mulai: new Date(`1970-01-01T${waktu_mulai}:00+07:00`),
         waktu_selesai: new Date(`1970-01-01T${(waktu_selesai || waktu_mulai)}:00+07:00`),
         lokasi, 
+        latitude: latitude ? latitude : null,
+        longitude: longitude ? longitude : null,
+        radius_meter: radius_meter ? Number(radius_meter) : 50,
         id_jenis_kegiatan: id_jenis_kegiatan ? Number(id_jenis_kegiatan) : null,
         id_gedung: fasilitator.id_gedung,
         id_fasilitator,
@@ -213,7 +217,8 @@ const editKegiatan = async (req, res) => {
   const { id_kegiatan } = req.params;
   const {
     nama_kegiatan, deskripsi, tanggal_kegiatan,
-    waktu_mulai, waktu_selesai, lokasi, id_jenis_kegiatan, status_kegiatan
+    waktu_mulai, waktu_selesai, lokasi, id_jenis_kegiatan, status_kegiatan,
+    latitude, longitude, radius_meter // Tambahan geofencing
   } = req.body;
 
   try {
@@ -233,6 +238,9 @@ const editKegiatan = async (req, res) => {
         waktu_mulai: waktu_mulai ? new Date(`1970-01-01T${waktu_mulai}:00+07:00`) : undefined,
         waktu_selesai: waktu_selesai ? new Date(`1970-01-01T${waktu_selesai}:00+07:00`) : undefined,
         lokasi,
+        latitude: latitude !== undefined ? latitude : undefined,
+        longitude: longitude !== undefined ? longitude : undefined,
+        radius_meter: radius_meter !== undefined ? Number(radius_meter) : undefined,
         id_jenis_kegiatan: id_jenis_kegiatan ? Number(id_jenis_kegiatan) : undefined,
         status_kegiatan
       }
@@ -664,9 +672,12 @@ const getQrToken = async (req, res) => {
 };
 
 
+// Impor utilitas geofencing
+const { getDistanceFromLatLonInM } = require('../utils/geofencing');
+
 // ── POST /api/kegiatan/scan-qr (MAHASISWA only) ───────────────────────────────
 const scanQr = async (req, res) => {
-  const { qr_token } = req.body;
+  const { qr_token, latitude, longitude } = req.body;
   try {
     if (req.user.role !== 'MAHASISWA') {
       return res.status(403).json({ message: 'Akses ditolak! Hanya mahasiswa.' });
@@ -680,7 +691,7 @@ const scanQr = async (req, res) => {
 
     // a. Cari kegiatan berdasarkan qr_token (raw SQL)
     const kRows = await prisma.$queryRawUnsafe(
-      `SELECT id_kegiatan, nama_kegiatan, qr_expires_at, status_kegiatan, id_gedung
+      `SELECT id_kegiatan, nama_kegiatan, qr_expires_at, status_kegiatan, id_gedung, latitude, longitude, radius_meter
        FROM kegiatan_pembinaan WHERE qr_token = ?`,
       qr_token
     );
@@ -732,7 +743,42 @@ const scanQr = async (req, res) => {
       return res.status(400).json({ message: 'Kamu sudah absen untuk kegiatan ini.' });
     }
 
-    // d. Insert kehadiran HADIR
+    // d. Validasi Geofencing jika kegiatan mensyaratkan lokasi
+    let jarak_meter = null;
+    let lokasi_valid = null;
+    if (kegiatan.latitude && kegiatan.longitude) {
+      if (!latitude || !longitude) {
+        return res.status(400).json({ message: 'Akses lokasi dibutuhkan untuk presensi kegiatan ini.' });
+      }
+
+      jarak_meter = getDistanceFromLatLonInM(
+        Number(kegiatan.latitude), Number(kegiatan.longitude),
+        Number(latitude), Number(longitude)
+      );
+
+      const radius = kegiatan.radius_meter || 50;
+      const batasToleransi = radius + 15; // Toleransi GPS 15 meter
+
+      if (jarak_meter > batasToleransi) {
+        // Log presensi gagal
+        await prisma.absensiLogGagal.create({
+          data: {
+            id_kegiatan: kegiatan.id_kegiatan,
+            id_mahasiswa,
+            latitude_scan: Number(latitude),
+            longitude_scan: Number(longitude),
+            jarak_meter,
+            alasan_ditolak: `Di luar radius. Jarak: ${Math.round(jarak_meter)}m, Max: ${radius}m`
+          }
+        });
+        return res.status(403).json({ 
+          message: `Kamu berada terlalu jauh dari lokasi kegiatan (${Math.round(jarak_meter)}m). Presensi ditolak.` 
+        });
+      }
+      lokasi_valid = true;
+    }
+
+    // e. Insert kehadiran HADIR
     const waktu_hadir = new Date();
     await prisma.kehadiran.create({
       data: {
@@ -740,6 +786,10 @@ const scanQr = async (req, res) => {
         id_mahasiswa,
         status_kehadiran: 'HADIR',
         waktu_absen: waktu_hadir,
+        lokasi_valid,
+        jarak_meter,
+        latitude_scan: latitude ? Number(latitude) : null,
+        longitude_scan: longitude ? Number(longitude) : null,
       }
     });
 

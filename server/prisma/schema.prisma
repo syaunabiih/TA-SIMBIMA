@@ -54,6 +54,7 @@ model Mahasiswa {
   push_subscriptions PushSubscription[]
   perizinans         Perizinan[]
   rekaps             RekapAbsensi[]
+  log_gagals         AbsensiLogGagal[]
 
   @@index([id_fakultas], map: "mahasiswa_id_fakultas_fkey")
   @@index([id_gedung], map: "mahasiswa_id_gedung_fkey")
@@ -116,10 +117,17 @@ model KegiatanPembinaan {
   qr_expires_at     DateTime?
   qr_token          String?          @unique
   id_jenis_kegiatan Int?
+  
+  // Geofencing
+  latitude          Decimal?         @db.Decimal(10, 8)
+  longitude         Decimal?         @db.Decimal(11, 8)
+  radius_meter      Int?             @default(50)
+  
   fasilitator       Fasilitator      @relation(fields: [id_fasilitator], references: [id_fasilitator])
   gedung            Gedung           @relation(fields: [id_gedung], references: [id_gedung])
   jenis_kegiatan    JenisKegiatan?   @relation(fields: [id_jenis_kegiatan], references: [id_jenis_kegiatan])
   kehadirans        Kehadiran[]
+  log_gagals        AbsensiLogGagal[]
 
   @@index([id_fasilitator], map: "kegiatan_pembinaan_id_fasilitator_fkey")
   @@index([id_gedung], map: "kegiatan_pembinaan_id_gedung_fkey")
@@ -137,6 +145,13 @@ model Kehadiran {
   id_mahasiswa     Int
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
+  
+  // Audit Geofencing
+  lokasi_valid     Boolean?
+  jarak_meter      Float?
+  latitude_scan    Decimal?          @db.Decimal(10, 8)
+  longitude_scan   Decimal?          @db.Decimal(11, 8)
+
   kegiatan         KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan])
   mahasiswa        Mahasiswa         @relation(fields: [id_mahasiswa], references: [id_mahasiswa])
 
@@ -378,4 +393,20 @@ model PushSubscription {
   mahasiswa   Mahasiswa?   @relation(fields: [id_mahasiswa], references: [id_mahasiswa], onDelete: Cascade)
   fasilitator Fasilitator? @relation(fields: [id_fasilitator], references: [id_fasilitator], onDelete: Cascade)
   ketua_pokja KetuaPokja?  @relation(fields: [id_ketua_pokja], references: [id_ketua_pokja], onDelete: Cascade)
+}
+
+model AbsensiLogGagal {
+  id_log          Int      @id @default(autoincrement())
+  id_kegiatan     Int
+  id_mahasiswa    Int
+  waktu_scan      DateTime @default(now())
+  latitude_scan   Decimal? @db.Decimal(10, 8)
+  longitude_scan  Decimal? @db.Decimal(11, 8)
+  jarak_meter     Float?
+  alasan_ditolak  String?  @db.Text
+
+  kegiatan        KegiatanPembinaan @relation(fields: [id_kegiatan], references: [id_kegiatan], onDelete: Cascade)
+  mahasiswa       Mahasiswa         @relation(fields: [id_mahasiswa], references: [id_mahasiswa], onDelete: Cascade)
+
+  @@map("absensi_log_gagal")
 }

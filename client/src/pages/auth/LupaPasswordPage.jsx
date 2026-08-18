@@ -33,8 +33,8 @@ function LupaPasswordPage() {
         <div className="card-animate page-enter" style={{ background: '#fff', width: '100%', maxWidth: '440px', padding: '40px', borderRadius: '24px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)', textAlign: 'center' }}>
           <div style={{ width: '72px', height: '72px', background: 'linear-gradient(135deg,#10b981,#059669)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#fff', boxShadow: '0 8px 24px rgba(16,185,129,0.3)' }}>
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <h2 style={{ margin: '0 0 10px', fontSize: '20px', fontWeight: '700', color: '#1e293b' }}>Email Terkirim!</h2>
@@ -44,7 +44,7 @@ function LupaPasswordPage() {
           </p>
           <div style={{ background: '#fef9ec', border: '1px solid #fde68a', borderRadius: '12px', padding: '14px 16px', marginBottom: '28px', textAlign: 'left' }}>
             <p style={{ margin: 0, color: '#92400e', fontSize: '13px', lineHeight: '1.7' }}>
-              ⏰ <strong>Link berlaku 1 jam.</strong> Jika tidak muncul di inbox, cek folder <strong>Spam / Junk</strong>.
+              <strong>Link berlaku 1 jam.</strong>
               Pastikan membuka link di <strong>komputer yang sama</strong> saat Anda mengakses SIMBIMA.
             </p>
           </div>
@@ -71,8 +71,8 @@ function LupaPasswordPage() {
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ width: '60px', height: '60px', background: '#ecfdf5', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#10b981' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <h1 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: '800', color: '#1e293b' }}>Lupa Password?</h1>

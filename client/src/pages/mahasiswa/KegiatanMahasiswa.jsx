@@ -5,24 +5,24 @@ import { apiGetKegiatan } from '../../utils/api';
 import { useCountUp } from '../../hooks/useCountUp';
 import ScanQrModal from '../../components/ScanQrModal';
 
-const IconHome     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
-const IconCalendar = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/></svg>;
-const IconFile     = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/></svg>;
-const IconFileText = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2"/></svg>;
+const IconHome = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
+const IconCalendar = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2" /></svg>;
+const IconFile = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" /><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2" /></svg>;
+const IconFileText = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" /><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2" /></svg>;
 
 const MENU = [
-  { path: '/mahasiswa/dashboard', label: 'Dashboard',     icon: <IconHome /> },
-  { path: '/mahasiswa/kehadiran', label: 'Kegiatan',      icon: <IconCalendar /> },
-  { path: '/mahasiswa/izin',      label: 'Perizinan',     icon: <IconFile /> },
-  { path: '/mahasiswa/rekap',     label: 'Rekap Absensi', icon: <IconFileText /> },
+  { path: '/mahasiswa/dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { path: '/mahasiswa/kehadiran', label: 'Kegiatan', icon: <IconCalendar /> },
+  { path: '/mahasiswa/izin', label: 'Perizinan', icon: <IconFile /> },
+  { path: '/mahasiswa/rekap', label: 'Rekap Absensi', icon: <IconFileText /> },
 ];
 
 // ─── Badge status kegiatan (untuk BERLANGSUNG / TERJADWAL) ─────
 function BadgeStatusKegiatan({ status }) {
   const map = {
-    TERJADWAL:   { label: 'Terjadwal',         bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+    TERJADWAL: { label: 'Terjadwal', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
     BERLANGSUNG: { label: 'Sedang Berlangsung', bg: '#84d5faff', color: '#050596ff', border: '#3e95f2ff' },
-    DIBATALKAN:  { label: 'Dibatalkan',         bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+    DIBATALKAN: { label: 'Dibatalkan', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
   };
   const s = map[status] || { label: status, bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' };
   return (
@@ -52,8 +52,8 @@ function BadgeKehadiran({ status }) {
   }
   const map = {
     HADIR: { label: 'Hadir', bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
-    ALPHA: { label: 'Alfa',  bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-    IZIN:  { label: 'Izin',  bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+    ALPHA: { label: 'Alfa', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+    IZIN: { label: 'Izin', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
     SAKIT: { label: 'Sakit', bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
   };
   const s = map[status] || { label: status, bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' };
@@ -70,9 +70,9 @@ function BadgeKehadiran({ status }) {
 
 // ─── Komponen Utama ────────────────────────────────────────────
 function KegiatanMahasiswa() {
-  const [kegiatan, setKegiatan]           = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [filter, setFilter]               = useState('SEMUA');
+  const [kegiatan, setKegiatan] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('SEMUA');
   const [showScanModal, setShowScanModal] = useState(false);
 
   const fetchKegiatan = (isPoll = false) => {
@@ -87,17 +87,17 @@ function KegiatanMahasiswa() {
   // ── Realtime: refresh saat ada update kegiatan / absensi ────────────────────
   const onUpdate = useCallback(() => fetchKegiatan(true), []);
   useSocket("kegiatan:update", onUpdate);
-  useSocket("absensi:update",  onUpdate);
+  useSocket("absensi:update", onUpdate);
 
-  const FILTERS  = ['SEMUA', 'BERLANGSUNG', 'SELESAI'];
+  const FILTERS = ['SEMUA', 'BERLANGSUNG', 'SELESAI'];
   const filtered = filter === 'SEMUA' ? kegiatan : kegiatan.filter(k => k.status_kegiatan === filter);
 
-  const total       = kegiatan.length;
+  const total = kegiatan.length;
   const berlangsung = kegiatan.filter(k => k.status_kegiatan === 'BERLANGSUNG').length;
-  const selesai     = kegiatan.filter(k => k.status_kegiatan === 'SELESAI').length;
-  const animTotal       = useCountUp(total);
+  const selesai = kegiatan.filter(k => k.status_kegiatan === 'SELESAI').length;
+  const animTotal = useCountUp(total);
   const animBerlangsung = useCountUp(berlangsung);
-  const animSelesai     = useCountUp(selesai);
+  const animSelesai = useCountUp(selesai);
 
   return (
     <DashboardLayout menuItems={MENU}>
@@ -130,10 +130,10 @@ function KegiatanMahasiswa() {
             onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(16,185,129,0.35)'; }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2M3 17v2a2 2 0 0 0 2 2h2M17 3h2a2 2 0 0 1 2 2v2M17 21h2a2 2 0 0 0 2-2v-2" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-              <rect x="7" y="7" width="4" height="4" rx="1" fill="white"/>
-              <rect x="13" y="7" width="4" height="4" rx="1" fill="white"/>
-              <rect x="7" y="13" width="4" height="4" rx="1" fill="white"/>
+              <path d="M3 7V5a2 2 0 0 1 2-2h2M3 17v2a2 2 0 0 0 2 2h2M17 3h2a2 2 0 0 1 2 2v2M17 21h2a2 2 0 0 0 2-2v-2" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              <rect x="7" y="7" width="4" height="4" rx="1" fill="white" />
+              <rect x="13" y="7" width="4" height="4" rx="1" fill="white" />
+              <rect x="7" y="13" width="4" height="4" rx="1" fill="white" />
             </svg>
             Scan QR Absen
           </button>
@@ -142,9 +142,9 @@ function KegiatanMahasiswa() {
         {/* Mini Stats */}
         <div className="grid-responsive-3" style={{ marginBottom: '20px' }}>
           {[
-            { label: 'Total Kegiatan',     value: animTotal,       color: '#10b981' },
+            { label: 'Total Kegiatan', value: animTotal, color: '#10b981' },
             { label: 'Sedang Berlangsung', value: animBerlangsung, color: '#059669' },
-            { label: 'Selesai',            value: animSelesai,     color: '#64748b' },
+            { label: 'Selesai', value: animSelesai, color: '#64748b' },
           ].map((s, i) => (
             <div key={s.label} className={`stat-card card-animate card-animate-${i + 1}`}
               style={{ padding: '16px 20px', textAlign: 'center' }}>
@@ -161,8 +161,8 @@ function KegiatanMahasiswa() {
               padding: '6px 14px', borderRadius: '20px', border: '1px solid',
               fontSize: '12px', fontWeight: '500', cursor: 'pointer',
               transition: 'all 0.2s ease',
-              background:  filter === f ? '#10b981' : '#ffffff',
-              color:       filter === f ? '#ffffff' : '#64748b',
+              background: filter === f ? '#10b981' : '#ffffff',
+              color: filter === f ? '#ffffff' : '#64748b',
               borderColor: filter === f ? '#10b981' : '#e2e8f0',
             }}>
               {f === 'SEMUA' ? 'Semua' : f === 'BERLANGSUNG' ? 'Sedang Berlangsung' : 'Selesai'}
@@ -196,7 +196,7 @@ function KegiatanMahasiswa() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {['#', 'Nama Kegiatan', 'Tanggal', 'Waktu', 'Lokasi', 'Status'].map(h => (
+                    {['No', 'Nama Kegiatan', 'Tanggal', 'Waktu', 'Lokasi', 'Status'].map(h => (
                       <th key={h} style={{
                         padding: '12px 14px', textAlign: 'left', color: '#64748b',
                         fontWeight: '500', fontSize: '11px', textTransform: 'uppercase',

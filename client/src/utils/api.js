@@ -86,11 +86,11 @@ export const apiGetQrToken = (id_kegiatan) =>
     headers: authHeader(),
   }).then(res => res.json());
 
-export const apiScanQr = (qr_token) =>
+export const apiScanQr = (data) =>
   fetch(`${BASE_URL}/kegiatan/scan-qr`, {
     method: 'POST',
     headers: authHeader(),
-    body: JSON.stringify({ qr_token }),
+    body: JSON.stringify(data),
   }).then(res => res.json());
 
 
