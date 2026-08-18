@@ -249,27 +249,6 @@ async function main() {
       }
     });
     console.log("Berhasil membuat kegiatan:", kegiatanBaru.nama_kegiatan);
-
-    // Buat petugas absensi untuk kegiatan ini
-    if (mhsF.length >= 2) {
-      await prisma.petugasAbsensi.createMany({
-        data: [
-          {
-            id_kegiatan: kegiatanBaru.id_kegiatan,
-            id_mahasiswa: mhsF[0].id_mahasiswa,
-            lantai_tanggung_jawab: mhsF[0].lantai,
-            status_tugas: k.status === 'SELESAI' ? 'SELESAI' : 'DITUGASKAN'
-          },
-          {
-            id_kegiatan: kegiatanBaru.id_kegiatan,
-            id_mahasiswa: mhsF[1].id_mahasiswa,
-            lantai_tanggung_jawab: mhsF[1].lantai,
-            status_tugas: k.status === 'SELESAI' ? 'SELESAI' : 'DITUGASKAN'
-          }
-        ]
-      });
-      console.log("Berhasil membuat petugas absensi untuk:", kegiatanBaru.nama_kegiatan);
-    }
   }
   console.log('✅ Kegiatan & Petugas sampel selesai (3 kegiatan Asrama Oren)');
 
