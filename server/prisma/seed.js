@@ -195,12 +195,26 @@ async function main() {
   console.log(`\n✅ Mahasiswa selesai (${totalMhs} mahasiswa)`);
 
   // ============================================================
-  // 5. KEGIATAN SAMPEL & PETUGAS (3 Kegiatan Gedung F)
+  // 5. JENIS KEGIATAN & KEGIATAN SAMPEL (3 Kegiatan Gedung F)
   // ============================================================
   const now = new Date();
   const thn = now.getFullYear();
   const bln = now.getMonth();
   const fasilF1 = fasilMap['F'][0];
+
+  // Seed Jenis Kegiatan
+  const jenisData = [
+    { nama_jenis: 'Shalat Subuh Berjamaah', is_wajib: true },
+    { nama_jenis: 'Absen Malam', is_wajib: true },
+    { nama_jenis: 'Kajian Rutin', is_wajib: false },
+    { nama_jenis: 'Lainnya', is_wajib: false },
+  ];
+  const jenisMap = {};
+  for (const jd of jenisData) {
+    const rec = await prisma.jenisKegiatan.create({ data: jd });
+    jenisMap[jd.nama_jenis] = rec.id_jenis_kegiatan;
+  }
+  console.log('✅ Jenis Kegiatan selesai');
 
   // Ambil beberapa mahasiswa Gedung F untuk dijadikan petugas
   const mhsF = await prisma.mahasiswa.findMany({
@@ -209,22 +223,22 @@ async function main() {
   });
 
   const kegiatanSampel = [
-    { nama:'Shalat Subuh Berjamaah',     jenis:'SUBUH_BERJAMAAH',      tgl: new Date(thn,bln, 5), mulai:'05:00', selesai:'06:00', lokasi:'Musholla Asrama Oren', status:'SELESAI' },
-    { nama:'Absensi Malam',              jenis:'ABSEN_MALAM',          tgl: new Date(thn,bln, 8), mulai:'21:00', selesai:'21:30', lokasi:'Koridor Gedung Oren', status:'BERLANGSUNG' },
-    { nama:'Kegiatan Pembinaan Karakter',jenis:'LAINNYA',              tgl: new Date(thn,bln,12), mulai:'19:30', selesai:'21:00', lokasi:'Aula Asrama Oren', status:'BERLANGSUNG' },
+    { nama:'Shalat Subuh Berjamaah',     id_jenis: jenisMap['Shalat Subuh Berjamaah'], tgl: new Date(thn,bln, 5), mulai:'05:00', selesai:'06:00', lokasi:'Musholla Asrama Oren', status:'SELESAI' },
+    { nama:'Absensi Malam',              id_jenis: jenisMap['Absen Malam'],            tgl: new Date(thn,bln, 8), mulai:'21:00', selesai:'21:30', lokasi:'Koridor Gedung Oren', status:'BERLANGSUNG' },
+    { nama:'Kegiatan Pembinaan Karakter',id_jenis: jenisMap['Lainnya'],                tgl: new Date(thn,bln,12), mulai:'19:30', selesai:'21:00', lokasi:'Aula Asrama Oren', status:'BERLANGSUNG' },
   ];
 
   for (const k of kegiatanSampel) {
     const [jm, jt] = k.mulai.split(':').map(Number);
     const [sm, st] = k.selesai.split(':').map(Number);
     
-    console.log("Mencoba membuat kegiatan:", k);
+    console.log("Mencoba membuat kegiatan:", k.nama);
 
     // Buat kegiatan
     const kegiatanBaru = await prisma.kegiatanPembinaan.create({
       data: {
         nama_kegiatan:    k.nama,
-        jenisKegiatan:    k.jenis,
+        id_jenis_kegiatan: k.id_jenis,
         tanggal_kegiatan: k.tgl,
         waktu_mulai:      new Date(1970, 0, 1, jm, jt, 0),
         waktu_selesai:    new Date(1970, 0, 1, sm, st, 0),
